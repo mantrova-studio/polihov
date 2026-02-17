@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Копилка — TSC</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <!-- ===== Login modal ===== -->
+  <div class="loginWrap" id="loginWrap" aria-hidden="true">
+    <div class="loginModal" role="dialog" aria-modal="true">
+      <div class="loginHead">
+        <div class="loginTitle">Вход</div>
+        <div class="loginSub">Введите пароль, чтобы открыть копилку</div>
+      </div>
+
+      <div class="loginBody">
+        <label class="fieldLabel" for="loginPass">Пароль</label>
+        <input id="loginPass" class="input" type="password" placeholder="••••••••" autocomplete="off" />
+        <div class="loginErr" id="loginError" style="display:none;">Неверный пароль</div>
+
+        <div class="loginActions">
+          <button class="btn" id="loginCancel" type="button">Закрыть</button>
+          <button class="btn primary" id="loginOk" type="button">Войти</button>
+        </div>
+
+        <div class="tiny muted" style="margin-top:10px;">
+          * Это “мягкая защита”: пароль хранится в коде, на GitHub Pages это нормально для личного пользования.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== App ===== -->
+  <header class="topbar">
+    <div class="container">
+      <div class="headerRow">
+        <h1 class="siteTitle">КОПИЛКА<br/><span class="muted">TSC стиль</span></h1>
+
+        <button class="iconBtn" id="lockBtn" type="button" title="Выйти">
+          <!-- можешь заменить на свою иконку -->
+          <span class="lockDot"></span>
+        </button>
+      </div>
+
+      <div class="controls">
+        <button class="btn small primary" id="createBtn" type="button">Создать копилку</button>
+        <button class="btn small" id="depositBtn" type="button">Пополнить</button>
+        <button class="btn small danger" id="withdrawBtn" type="button">Вывести</button>
+      </div>
+
+      <div class="searchRow">
+        <input id="searchInput" class="searchInput" type="search" placeholder="Поиск по названию..." />
+        <button id="clearSearch" class="searchClear" type="button" title="Очистить">✕</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="grid" id="grid"></div>
+    <div class="empty" id="empty" style="display:none;">Пока нет копилок. Создай первую 🙂</div>
+  </main>
+
+  <!-- ===== Modal: create/edit/ops ===== -->
+  <div class="modalWrap" id="modalWrap" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalHead">
+        <h3 id="modalTitle">Окно</h3>
+        <button class="iconBtn" id="closeModal" type="button" title="Закрыть">✕</button>
+      </div>
+
+      <div class="modalBody">
+        <!-- create form -->
+        <div id="createForm" style="display:none;">
+          <div class="formGrid">
+            <div class="field" style="grid-column:1/-1;">
+              <label class="fieldLabel">Название</label>
+              <input id="f_name" class="input" placeholder="Например: Отпуск" />
+            </div>
+
+            <div class="field">
+              <label class="fieldLabel">Цель (₽)</label>
+              <input id="f_goal" class="input" inputmode="numeric" placeholder="Например: 50000" />
+              <div class="tiny muted">Можно оставить пустым — это будет “без цели”.</div>
+            </div>
+
+            <div class="field">
+              <label class="fieldLabel">Стартовая сумма (₽)</label>
+              <input id="f_start" class="input" inputmode="numeric" placeholder="Например: 0" />
+            </div>
+          </div>
+        </div>
+
+        <!-- operation form -->
+        <div id="opForm" style="display:none;">
+          <div class="formGrid">
+            <div class="field" style="grid-column:1/-1;">
+              <label class="fieldLabel">Копилка</label>
+              <select id="f_bank" class="select"></select>
+            </div>
+
+            <div class="field" style="grid-column:1/-1;">
+              <label class="fieldLabel">Сумма (₽)</label>
+              <input id="f_amount" class="input" inputmode="numeric" placeholder="Например: 1500" />
+              <div class="tiny muted" id="opHint"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modalFoot">
+        <button class="btn" id="cancelBtn" type="button">Отмена</button>
+        <button class="btn primary" id="saveBtn" type="button">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
