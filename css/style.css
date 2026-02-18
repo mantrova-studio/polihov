@@ -312,11 +312,13 @@ body{
 @media (max-width: 480px) {
 
   .controls {
-     flex-direction: column;
-  }
+   display: grid;
+   gap: 12px;
+}
 
-  .controls button {
-     width: 100%;
-  }
+.controls button {
+   width: 100%;
+   max-width: 100%;
+}
 
 }
