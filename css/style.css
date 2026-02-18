@@ -387,3 +387,7 @@ body{
   top:50%;
   transform:translateY(-50%);
 }
+
+.searchRow{
+  display:none !important;
+}
