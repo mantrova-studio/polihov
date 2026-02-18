@@ -13,13 +13,24 @@
         <h1 class="siteTitle"><br>КОПИЛКА<br><br><span class="muted"> </span></h1>
       </div>
 
+<button class="iconBtn orderToggle" id="orderBtn" type="button" title="Изменить порядок">
+  <!-- карандаш -->
+  <svg id="orderIconEdit" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M12 20h9"/>
+    <path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/>
+  </svg>
+
+  <!-- галочка -->
+  <svg id="orderIconDone" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+</button>
+
       <div class="controls">
         <button class="btn small primary" id="createBtn" type="button">Создать копилку</button>
         <button class="btn small" id="depositBtn" type="button">Пополнить</button>
         <button class="btn small danger" id="withdrawBtn" type="button">Вывести</button>
       </div>
-
-<button class="btn small" id="orderBtn" type="button">Порядок</button>
 
       <div class="controls" style="padding-top:0;">
         <button class="btn small" id="loadGithubBtn" type="button">Загрузить из GitHub</button>
