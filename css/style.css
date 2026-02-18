@@ -339,3 +339,9 @@ body{
   width:100%;
   white-space: nowrap;
 }
+
+#depositBtn,
+#withdrawBtn,
+#saveGithubBtn{
+  display: none !important;
+}
