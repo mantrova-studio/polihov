@@ -387,7 +387,7 @@ body{
 .orderToggle{
   position:absolute;
   right:0;
-  top:50%;
+  top:65%;
   transform:translateY(-50%);
 }
 
@@ -424,12 +424,12 @@ body{
 .saveGithubBtn{
   position:absolute;
   right:45px;
-  top:50%;
+  top:65%;
   transform:translateY(-50%);
 }
 .createBtn{
   position:absolute;
   right:90px;
-  top:70%;
+  top:65%;
   transform:translateY(-50%);
 }
