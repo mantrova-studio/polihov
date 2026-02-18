@@ -360,3 +360,18 @@ body{
 
 /* подсветка перетаскиваемой */
 .dragGhost{ opacity: .45; }
+
+.headerRow{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  position:relative;
+  padding:14px 0 10px;
+}
+
+.orderToggle{
+  position:absolute;
+  right:0;
+  top:50%;
+  transform:translateY(-50%);
+}
