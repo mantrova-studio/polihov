@@ -345,3 +345,18 @@ body{
 #loadGithubBtn{
   display: none !important;
 }
+
+/* режим редактирования порядка */
+.reorderOn .card{
+  animation: tscWiggle .35s ease-in-out infinite alternate;
+  cursor: grab;
+}
+.reorderOn .card:active{ cursor: grabbing; }
+
+@keyframes tscWiggle{
+  from{ transform: rotate(-0.4deg); }
+  to{ transform: rotate(0.4deg); }
+}
+
+/* подсветка перетаскиваемой */
+.dragGhost{ opacity: .45; }
