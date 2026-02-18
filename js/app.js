@@ -530,16 +530,21 @@ saveGithubBtn?.addEventListener("click", async ()=>{
 });
 
 // ====== Order button ======
+const orderIconEdit = document.getElementById("orderIconEdit");
+const orderIconDone = document.getElementById("orderIconDone");
+
 orderBtn?.addEventListener("click", ()=>{
   reorderMode = !reorderMode;
 
   if(reorderMode){
-    orderBtn.textContent = "Готово";
     enableReorder();
+    orderIconEdit.style.display = "none";
+    orderIconDone.style.display = "block";
   }else{
-    orderBtn.textContent = "Порядок";
     disableReorder();
     render();
+    orderIconEdit.style.display = "block";
+    orderIconDone.style.display = "none";
   }
 });
 
