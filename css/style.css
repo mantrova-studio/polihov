@@ -46,8 +46,8 @@ body{
 }
 
 .headerRow.center{
-  justify-content:center;
-  text-align:center;
+  justify-content:space-between;
+  text-align:left;
   align-items:center;
   min-height:64px;
 }
@@ -58,6 +58,7 @@ body{
   letter-spacing:.06em;
   line-height:1.2;
   text-transform:uppercase;
+  text-align:left;
 }
 .muted{ color: var(--muted); }
 .tiny{ font-size:12px; }
