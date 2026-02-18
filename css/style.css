@@ -157,6 +157,7 @@ body{
   grid-template-columns: repeat(2, minmax(0,1fr));
   gap:12px;
   padding: 14px 0 60px;
+  justify-content:center;
 }
 @media (max-width: 560px){
   .grid{ grid-template-columns: 1fr; }
@@ -325,4 +326,16 @@ body{
   .btn.small{
     width:100%;
   }
+}
+
+.cardActions{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap:8px;
+  margin-top:10px;
+}
+
+.cardActions .btn{
+  width:100%;
+  white-space: nowrap;
 }
