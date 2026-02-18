@@ -342,6 +342,6 @@ body{
 
 #depositBtn,
 #withdrawBtn,
-#saveGithubBtn{
+#loadGithubBtn{
   display: none !important;
 }
