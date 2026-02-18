@@ -5,7 +5,7 @@ const APP_KEY = "tsc_piggy_v2_cache";
 const GITHUB_TOKEN = "PASTE_YOUR_TOKEN";
 const GITHUB_OWNER = "mantrova-studio";
 const GITHUB_REPO  = "sd-tsc";              // или твой repo piggy-tsc
-const GITHUB_PATH  = "/data/piggy.json";     // файл с копилками
+const GITHUB_PATH  = "data/piggy.json";     // файл с копилками
 
 // ====== DOM ======
 const grid = document.getElementById("grid");
@@ -17,6 +17,8 @@ const withdrawBtn = document.getElementById("withdrawBtn");
 
 const loadGithubBtn = document.getElementById("loadGithubBtn");
 const saveGithubBtn = document.getElementById("saveGithubBtn");
+
+const orderBtn = document.getElementById("orderBtn");
 
 const searchInput = document.getElementById("searchInput");
 const clearSearch = document.getElementById("clearSearch");
@@ -46,6 +48,10 @@ let query = "";
 
 let modalMode = null; // "create" | "deposit" | "withdraw" | "edit"
 let editingId = null;
+
+// reorder mode
+let reorderMode = false;
+let sortable = null;
 
 // ====== helpers ======
 function escapeHtml(str){
@@ -129,10 +135,25 @@ function normalizeBanks(list){
       id,
       name,
       goal: (x.goal === null || x.goal === "" || x.goal === undefined) ? null : Number(x.goal),
-      balance: Number(x.balance || 0)
+      balance: Number(x.balance || 0),
+      createdAt: Number(x.createdAt || 0) || null,
+      order: Number(x.order || 0) || null
     });
   }
   return Array.from(map.values());
+}
+
+// если у старых копилок нет order/createdAt — назначаем один раз
+function ensureOrderFields(){
+  const now = Date.now();
+  let changed = false;
+  banks = banks.map((b, i) => {
+    const createdAt = b.createdAt ?? (now - i);
+    const order = b.order ?? createdAt;
+    if(b.createdAt == null || b.order == null) changed = true;
+    return { ...b, createdAt, order };
+  });
+  if(changed) saveCache();
 }
 
 // ====== GitHub API ======
@@ -199,8 +220,49 @@ closeModal.addEventListener("click", closeModalFn);
 cancelBtn.addEventListener("click", closeModalFn);
 modalWrap.addEventListener("click", (e)=>{ if(e.target === modalWrap) closeModalFn(); });
 
+// ====== reorder mode ======
+function enableReorder(){
+  if(sortable || !window.Sortable) return;
+
+  document.body.classList.add("reorderOn");
+
+  sortable = new Sortable(grid, {
+    animation: 180,
+    ghostClass: "dragGhost",
+    onEnd: () => {
+      const cards = [...grid.children];
+      const base = Date.now();
+      const total = cards.length;
+
+      cards.forEach((card, idx) => {
+        const id = card.dataset.id;
+        const b = banks.find(x => x.id === id);
+        if(b){
+          // чтобы верхняя была "новее/выше"
+          b.order = base + (total - idx);
+        }
+      });
+
+      saveCache();
+    }
+  });
+}
+
+function disableReorder(){
+  if(!sortable) {
+    document.body.classList.remove("reorderOn");
+    return;
+  }
+  sortable.destroy();
+  sortable = null;
+  document.body.classList.remove("reorderOn");
+}
+
 // ====== render ======
 function applyFilter(){
+  // порядок сверху: больший order
+  banks.sort((a,b) => (b.order ?? 0) - (a.order ?? 0));
+
   const q = norm(query);
   filtered = banks.filter(b => !q || norm(b.name).includes(q));
   renderList();
@@ -220,6 +282,8 @@ function renderList(){
 
     const card = document.createElement("div");
     card.className = "card";
+    card.dataset.id = b.id;
+
     card.innerHTML = `
       <div class="cardTop">
         <div>
@@ -246,6 +310,7 @@ function renderList(){
       </div>
     `;
 
+    // В режиме порядка можно таскать, но кнопки пусть остаются (если хочешь — могу скрывать)
     card.querySelector('[data-act="deposit"]').addEventListener("click", ()=>openOp("deposit", b.id));
     card.querySelector('[data-act="withdraw"]').addEventListener("click", ()=>openOp("withdraw", b.id));
     card.querySelector('[data-act="edit"]').addEventListener("click", ()=>openEdit(b.id));
@@ -253,6 +318,9 @@ function renderList(){
 
     grid.appendChild(card);
   }
+
+  // если режим порядка включён — убедимся, что Sortable активен
+  if(reorderMode) enableReorder();
 }
 
 function render(){
@@ -339,13 +407,15 @@ function saveFromModal(){
 
     if(modalMode === "create"){
       const id = uniqueId(slug(name) || "bank");
-      banks.unshift({ id, name, goal: goal ?? null, balance: start });
+      const now = Date.now();
+      banks.unshift({ id, name, goal: goal ?? null, balance: start, createdAt: now, order: now });
     }else{
       const b = banks.find(x => x.id === editingId);
       if(!b) return;
       b.name = name;
       b.goal = goal ?? null;
       b.balance = start;
+      // order не трогаем при редактировании
     }
 
     saveCache();
@@ -387,12 +457,12 @@ function saveFromModal(){
 
 saveBtn.addEventListener("click", saveFromModal);
 
-createBtn.addEventListener("click", openCreate);
-depositBtn.addEventListener("click", ()=>{
+createBtn?.addEventListener("click", openCreate);
+depositBtn?.addEventListener("click", ()=>{
   if(!banks.length){ openCreate(); return; }
   openOp("deposit");
 });
-withdrawBtn.addEventListener("click", ()=>{
+withdrawBtn?.addEventListener("click", ()=>{
   if(!banks.length){ openCreate(); return; }
   openOp("withdraw");
 });
@@ -416,12 +486,13 @@ clearSearch.addEventListener("click", ()=>{
 syncClear();
 
 // ====== GitHub buttons ======
-loadGithubBtn.addEventListener("click", async ()=>{
+loadGithubBtn?.addEventListener("click", async ()=>{
   try{
     loadGithubBtn.disabled = true;
     loadGithubBtn.textContent = "Загружаю...";
     const { data } = await githubGetFile();
     banks = normalizeBanks(data?.banks || []);
+    ensureOrderFields();
     saveCache();
     render();
     alert("Загружено из GitHub.");
@@ -434,7 +505,7 @@ loadGithubBtn.addEventListener("click", async ()=>{
   }
 });
 
-saveGithubBtn.addEventListener("click", async ()=>{
+saveGithubBtn?.addEventListener("click", async ()=>{
   try{
     if(!GITHUB_TOKEN || GITHUB_TOKEN === "PASTE_YOUR_TOKEN") {
       alert("Вставь GitHub token в js/app.js (GITHUB_TOKEN).");
@@ -458,6 +529,21 @@ saveGithubBtn.addEventListener("click", async ()=>{
   }
 });
 
+// ====== Order button ======
+orderBtn?.addEventListener("click", ()=>{
+  reorderMode = !reorderMode;
+
+  if(reorderMode){
+    orderBtn.textContent = "Готово";
+    enableReorder();
+  }else{
+    orderBtn.textContent = "Порядок";
+    disableReorder();
+    render();
+  }
+});
+
 // ====== init ======
-loadCache();     // быстрый старт (кэш)
-render();        // показываем сразу
+loadCache();
+ensureOrderFields();
+render();
