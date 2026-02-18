@@ -48,6 +48,8 @@ body{
 .headerRow.center{
   justify-content:center;
   text-align:center;
+  align-items:center;
+  min-height:64px;
 }
 
 .siteTitle{
