@@ -1,23 +1,22 @@
-// ====== SETTINGS ======
-const APP_KEY = "tsc_piggy_v1";
-const SESSION_KEY = "tsc_piggy_ok_v1";
-const PASSWORD = ""; // поменяй на свой
+// ====== SETTINGS (GitHub) ======
+const APP_KEY = "tsc_piggy_v2_cache";
+
+// ВАЖНО: токен будет виден в браузере.
+const GITHUB_TOKEN = "PASTE_YOUR_TOKEN";
+const GITHUB_OWNER = "mantrova-studio";
+const GITHUB_REPO  = "sd-tsc";              // или твой repo piggy-tsc
+const GITHUB_PATH  = "data/piggy.json";     // файл с копилками
 
 // ====== DOM ======
-const loginWrap = document.getElementById("loginWrap");
-const loginPass = document.getElementById("loginPass");
-const loginOk = document.getElementById("loginOk");
-const loginCancel = document.getElementById("loginCancel");
-const loginError = document.getElementById("loginError");
-
-const lockBtn = document.getElementById("lockBtn");
-
 const grid = document.getElementById("grid");
 const empty = document.getElementById("empty");
 
 const createBtn = document.getElementById("createBtn");
 const depositBtn = document.getElementById("depositBtn");
 const withdrawBtn = document.getElementById("withdrawBtn");
+
+const loadGithubBtn = document.getElementById("loadGithubBtn");
+const saveGithubBtn = document.getElementById("saveGithubBtn");
 
 const searchInput = document.getElementById("searchInput");
 const clearSearch = document.getElementById("clearSearch");
@@ -48,97 +47,15 @@ let query = "";
 let modalMode = null; // "create" | "deposit" | "withdraw" | "edit"
 let editingId = null;
 
-function loadState(){
-  try{
-    const raw = localStorage.getItem(APP_KEY);
-    const data = raw ? JSON.parse(raw) : null;
-    const list = Array.isArray(data?.banks) ? data.banks : [];
-    banks = list.map(x => ({
-      id: String(x.id || ""),
-      name: String(x.name || "").trim(),
-      goal: x.goal === null || x.goal === "" || x.goal === undefined ? null : Number(x.goal),
-      balance: Number(x.balance || 0)
-    })).filter(x => x.id && x.name);
-  }catch{
-    banks = [];
-  }
+// ====== helpers ======
+function escapeHtml(str){
+  return (str ?? "").toString()
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
 }
-
-function saveState(){
-  localStorage.setItem(APP_KEY, JSON.stringify({ banks }, null, 2));
-}
-
-function isAuthed(){
-  return sessionStorage.getItem(SESSION_KEY) === "1";
-}
-function setAuthed(ok){
-  if(ok) sessionStorage.setItem(SESSION_KEY, "1");
-  else sessionStorage.removeItem(SESSION_KEY);
-}
-
-// ====== LOGIN MODAL ======
-function openLogin(){
-  loginWrap.classList.add("open");
-  loginWrap.setAttribute("aria-hidden","false");
-  loginError.style.display = "none";
-  loginPass.value = "";
-  setTimeout(()=>loginPass.focus(), 60);
-}
-function closeLogin(){
-  loginWrap.classList.remove("open");
-  loginWrap.setAttribute("aria-hidden","true");
-}
-
-function requireAuth(){
-  if(isAuthed()) return true;
-  openLogin();
-  return false;
-}
-
-loginOk.addEventListener("click", ()=>{
-  if(loginPass.value === PASSWORD){
-    setAuthed(true);
-    closeLogin();
-    render();
-  }else{
-    loginError.style.display = "block";
-    loginPass.select();
-  }
-});
-
-loginCancel.addEventListener("click", ()=>{
-  // просто закрываем — без входа сайт будет пустой
-  closeLogin();
-});
-
-loginWrap.addEventListener("click", (e)=>{
-  if(e.target === loginWrap) closeLogin();
-});
-
-loginPass.addEventListener("keydown", (e)=>{
-  if(e.key === "Enter") loginOk.click();
-  if(e.key === "Escape") loginCancel.click();
-});
-
-lockBtn.addEventListener("click", ()=>{
-  setAuthed(false);
-  openLogin();
-});
-
-// ====== UI HELPERS ======
-function openModal(title){
-  modalTitle.textContent = title;
-  modalWrap.classList.add("open");
-  modalWrap.setAttribute("aria-hidden","false");
-}
-function closeModalFn(){
-  modalWrap.classList.remove("open");
-  modalWrap.setAttribute("aria-hidden","true");
-}
-
-closeModal.addEventListener("click", closeModalFn);
-cancelBtn.addEventListener("click", closeModalFn);
-modalWrap.addEventListener("click", (e)=>{ if(e.target === modalWrap) closeModalFn(); });
 
 function money(n){
   const v = Number(n || 0);
@@ -166,6 +83,13 @@ function uniqueId(base){
   return id;
 }
 
+function parseNum(val){
+  const s = (val ?? "").toString().replace(/\s/g,"").replace(",",".");
+  const n = Number(s);
+  if(!Number.isFinite(n)) return null;
+  return n;
+}
+
 function setSelectBanks(){
   f_bank.innerHTML = "";
   for(const b of banks){
@@ -176,7 +100,106 @@ function setSelectBanks(){
   }
 }
 
-// ====== RENDER ======
+function loadCache(){
+  try{
+    const raw = localStorage.getItem(APP_KEY);
+    if(!raw) return false;
+    const data = JSON.parse(raw);
+    if(!Array.isArray(data?.banks)) return false;
+    banks = normalizeBanks(data.banks);
+    return true;
+  }catch{
+    return false;
+  }
+}
+
+function saveCache(){
+  localStorage.setItem(APP_KEY, JSON.stringify({ banks }, null, 2));
+}
+
+function normalizeBanks(list){
+  const arr = Array.isArray(list) ? list : [];
+  const map = new Map();
+  for(const x of arr){
+    if(!x) continue;
+    const id = String(x.id || "").trim();
+    const name = String(x.name || "").trim();
+    if(!id || !name) continue;
+    map.set(id, {
+      id,
+      name,
+      goal: (x.goal === null || x.goal === "" || x.goal === undefined) ? null : Number(x.goal),
+      balance: Number(x.balance || 0)
+    });
+  }
+  return Array.from(map.values());
+}
+
+// ====== GitHub API ======
+function toBase64Utf8(str){
+  return btoa(unescape(encodeURIComponent(str)));
+}
+
+async function githubGetFile(){
+  const api = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_PATH}`;
+
+  const res = await fetch(api, {
+    headers: { "Authorization": `token ${GITHUB_TOKEN}` }
+  });
+
+  if(!res.ok){
+    const t = await res.text();
+    throw new Error("GitHub read failed: " + t);
+  }
+
+  const json = await res.json(); // has content + sha
+  const content = decodeURIComponent(escape(atob(json.content)));
+  return { data: JSON.parse(content), sha: json.sha };
+}
+
+async function githubPutFile(newData, sha){
+  const api = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_PATH}`;
+
+  const jsonText = JSON.stringify(newData, null, 2);
+  const body = {
+    message: "Update piggy.json via web",
+    content: toBase64Utf8(jsonText),
+    sha
+  };
+
+  const res = await fetch(api, {
+    method: "PUT",
+    headers: {
+      "Authorization": `token ${GITHUB_TOKEN}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+
+  if(!res.ok){
+    const t = await res.text();
+    throw new Error("GitHub save failed: " + t);
+  }
+
+  return await res.json();
+}
+
+// ====== UI ======
+function openModal(title){
+  modalTitle.textContent = title;
+  modalWrap.classList.add("open");
+  modalWrap.setAttribute("aria-hidden","false");
+}
+function closeModalFn(){
+  modalWrap.classList.remove("open");
+  modalWrap.setAttribute("aria-hidden","true");
+}
+
+closeModal.addEventListener("click", closeModalFn);
+cancelBtn.addEventListener("click", closeModalFn);
+modalWrap.addEventListener("click", (e)=>{ if(e.target === modalWrap) closeModalFn(); });
+
+// ====== render ======
 function applyFilter(){
   const q = norm(query);
   filtered = banks.filter(b => !q || norm(b.name).includes(q));
@@ -232,38 +255,19 @@ function renderList(){
   }
 }
 
-function escapeHtml(str){
-  return (str ?? "").toString()
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#039;");
-}
-
 function render(){
-  if(!isAuthed()){
-    grid.innerHTML = "";
-    empty.style.display = "block";
-    empty.textContent = "Сайт закрыт. Введите пароль.";
-    return;
-  }
-  empty.textContent = "Пока нет копилок. Создай первую 🙂";
   applyFilter();
 }
 
-// ====== ACTIONS ======
+// ====== actions ======
 function openCreate(){
   modalMode = "create";
   editingId = null;
-
   createForm.style.display = "block";
   opForm.style.display = "none";
-
   f_name.value = "";
   f_goal.value = "";
   f_start.value = "";
-
   openModal("Создать копилку");
 }
 
@@ -286,7 +290,6 @@ function openEdit(id){
 
 function openOp(type, id=null){
   modalMode = type; // deposit | withdraw
-
   createForm.style.display = "none";
   opForm.style.display = "block";
 
@@ -307,15 +310,8 @@ function deleteBank(id){
   if(!b) return;
   if(!confirm(`Удалить копилку "${b.name}"?`)) return;
   banks = banks.filter(x => x.id !== id);
-  saveState();
+  saveCache();
   render();
-}
-
-function parseNum(val){
-  const s = (val ?? "").toString().replace(/\s/g,"").replace(",",".");
-  const n = Number(s);
-  if(!Number.isFinite(n)) return null;
-  return n;
 }
 
 function saveFromModal(){
@@ -352,7 +348,7 @@ function saveFromModal(){
       b.balance = start;
     }
 
-    saveState();
+    saveCache();
     closeModalFn();
     render();
     return;
@@ -379,13 +375,10 @@ function saveFromModal(){
     const b = banks.find(x => x.id === id);
     if(!b) return;
 
-    if(modalMode === "deposit"){
-      b.balance += amt;
-    }else{
-      b.balance = Math.max(0, b.balance - amt);
-    }
+    if(modalMode === "deposit") b.balance += amt;
+    else b.balance = Math.max(0, b.balance - amt);
 
-    saveState();
+    saveCache();
     closeModalFn();
     render();
     return;
@@ -394,24 +387,17 @@ function saveFromModal(){
 
 saveBtn.addEventListener("click", saveFromModal);
 
-createBtn.addEventListener("click", ()=>{
-  if(!requireAuth()) return;
-  openCreate();
-});
-
+createBtn.addEventListener("click", openCreate);
 depositBtn.addEventListener("click", ()=>{
-  if(!requireAuth()) return;
   if(!banks.length){ openCreate(); return; }
   openOp("deposit");
 });
-
 withdrawBtn.addEventListener("click", ()=>{
-  if(!requireAuth()) return;
   if(!banks.length){ openCreate(); return; }
   openOp("withdraw");
 });
 
-// search
+// ====== search ======
 clearSearch.style.display = "none";
 function syncClear(){ clearSearch.style.display = searchInput.value ? "block" : "none"; }
 
@@ -429,10 +415,49 @@ clearSearch.addEventListener("click", ()=>{
 });
 syncClear();
 
-// init
-loadState();
-if(isAuthed()){
-  render();
-}else{
-  openLogin();
-}
+// ====== GitHub buttons ======
+loadGithubBtn.addEventListener("click", async ()=>{
+  try{
+    loadGithubBtn.disabled = true;
+    loadGithubBtn.textContent = "Загружаю...";
+    const { data } = await githubGetFile();
+    banks = normalizeBanks(data?.banks || []);
+    saveCache();
+    render();
+    alert("Загружено из GitHub.");
+  }catch(e){
+    console.error(e);
+    alert("Ошибка загрузки из GitHub: " + e.message);
+  }finally{
+    loadGithubBtn.disabled = false;
+    loadGithubBtn.textContent = "Загрузить из GitHub";
+  }
+});
+
+saveGithubBtn.addEventListener("click", async ()=>{
+  try{
+    if(!GITHUB_TOKEN || GITHUB_TOKEN === "PASTE_YOUR_TOKEN") {
+      alert("Вставь GitHub token в js/app.js (GITHUB_TOKEN).");
+      return;
+    }
+    saveGithubBtn.disabled = true;
+    saveGithubBtn.textContent = "Сохраняю...";
+
+    const cur = await githubGetFile(); // берём sha
+    await githubPutFile({ banks }, cur.sha);
+
+    saveGithubBtn.textContent = "Сохранено ✓";
+    setTimeout(()=> saveGithubBtn.textContent = "Сохранить в GitHub", 1200);
+    alert("Сохранено в GitHub. Обновление Pages может занять немного времени.");
+  }catch(e){
+    console.error(e);
+    alert("Ошибка сохранения в GitHub: " + e.message);
+    saveGithubBtn.textContent = "Сохранить в GitHub";
+  }finally{
+    saveGithubBtn.disabled = false;
+  }
+});
+
+// ====== init ======
+loadCache();     // быстрый старт (кэш)
+render();        // показываем сразу
