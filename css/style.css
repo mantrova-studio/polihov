@@ -46,7 +46,7 @@ body{
 
 .headerRow.center{
   justify-content:center;
-  text-align:center;
+  text-align:left;
 }
 
 .siteTitle{
