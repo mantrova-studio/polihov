@@ -5,7 +5,7 @@ const APP_KEY = "tsc_piggy_v2_cache";
 const GITHUB_TOKEN = "PASTE_YOUR_TOKEN";
 const GITHUB_OWNER = "mantrova-studio";
 const GITHUB_REPO  = "sd-tsc";              // или твой repo piggy-tsc
-const GITHUB_PATH  = "data/piggy.json";     // файл с копилками
+const GITHUB_PATH  = "/data/piggy.json";     // файл с копилками
 
 // ====== DOM ======
 const grid = document.getElementById("grid");
