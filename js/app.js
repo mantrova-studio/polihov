@@ -1,7 +1,7 @@
 // ====== SETTINGS ======
 const APP_KEY = "tsc_piggy_v1";
 const SESSION_KEY = "tsc_piggy_ok_v1";
-const PASSWORD = "601/18"; // поменяй на свой
+const PASSWORD = ""; // поменяй на свой
 
 // ====== DOM ======
 const loginWrap = document.getElementById("loginWrap");
