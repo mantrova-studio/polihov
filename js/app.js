@@ -4,8 +4,8 @@ const APP_KEY = "tsc_piggy_v2_cache";
 // ВАЖНО: токен будет виден в браузере.
 const GITHUB_TOKEN = "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";
 const GITHUB_OWNER = "mantrova-studio";
-const GITHUB_REPO  = "polihov";              // или твой repo piggy-tsc
-const GITHUB_PATH  = "data/piggy.json";     // файл с копилками
+const GITHUB_REPO  = "polihov";
+const GITHUB_PATH  = "data/piggy.json"; // файл с копилками
 
 // ====== DOM ======
 const grid = document.getElementById("grid");
@@ -161,6 +161,7 @@ function toBase64Utf8(str){
   return btoa(unescape(encodeURIComponent(str)));
 }
 
+// 1) Чтение через GitHub API (нужен токен)
 async function githubGetFile(){
   const api = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_PATH}`;
 
@@ -174,7 +175,7 @@ async function githubGetFile(){
   }
 
   const json = await res.json(); // has content + sha
-  const content = decodeURIComponent(escape(atob(json.content)));
+  const content = decodeURIComponent(escape(atob((json.content || "").replace(/\n/g,""))));
   return { data: JSON.parse(content), sha: json.sha };
 }
 
@@ -203,6 +204,47 @@ async function githubPutFile(newData, sha){
   }
 
   return await res.json();
+}
+
+// 2) Чтение через GitHub Pages (без токена) — это то, что работает в инкогнито
+async function pagesGetFile(){
+  // cache bust, чтобы не ловить старый кэш
+  const url = `${GITHUB_PATH}?v=${Date.now()}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if(!res.ok) return null;
+  return await res.json();
+}
+
+// ====== Автозагрузка (Pages -> API -> Cache) ======
+async function autoLoadState(){
+  // Сначала пробуем GitHub Pages
+  try{
+    const pages = await pagesGetFile();
+    if(pages && typeof pages === "object" && Array.isArray(pages.banks)){
+      banks = normalizeBanks(pages.banks);
+      ensureOrderFields();
+      saveCache();
+      return { from: "pages" };
+    }
+  }catch{}
+
+  // Потом пробуем GitHub API (если есть токен)
+  try{
+    if(GITHUB_TOKEN && !GITHUB_TOKEN.includes("PASTE")){
+      const { data } = await githubGetFile();
+      if(data && typeof data === "object" && Array.isArray(data.banks)){
+        banks = normalizeBanks(data.banks);
+        ensureOrderFields();
+        saveCache();
+        return { from: "api" };
+      }
+    }
+  }catch{}
+
+  // Иначе берём локальный кеш
+  const ok = loadCache();
+  ensureOrderFields();
+  return { from: ok ? "cache" : "empty" };
 }
 
 // ====== UI ======
@@ -238,7 +280,6 @@ function enableReorder(){
         const id = card.dataset.id;
         const b = banks.find(x => x.id === id);
         if(b){
-          // чтобы верхняя была "новее/выше"
           b.order = base + (total - idx);
         }
       });
@@ -260,7 +301,6 @@ function disableReorder(){
 
 // ====== render ======
 function applyFilter(){
-  // порядок сверху: больший order
   banks.sort((a,b) => (b.order ?? 0) - (a.order ?? 0));
 
   const q = norm(query);
@@ -310,7 +350,6 @@ function renderList(){
       </div>
     `;
 
-    // В режиме порядка можно таскать, но кнопки пусть остаются (если хочешь — могу скрывать)
     card.querySelector('[data-act="deposit"]').addEventListener("click", ()=>openOp("deposit", b.id));
     card.querySelector('[data-act="withdraw"]').addEventListener("click", ()=>openOp("withdraw", b.id));
     card.querySelector('[data-act="edit"]').addEventListener("click", ()=>openEdit(b.id));
@@ -319,7 +358,6 @@ function renderList(){
     grid.appendChild(card);
   }
 
-  // если режим порядка включён — убедимся, что Sortable активен
   if(reorderMode) enableReorder();
 }
 
@@ -415,7 +453,6 @@ function saveFromModal(){
       b.name = name;
       b.goal = goal ?? null;
       b.balance = start;
-      // order не трогаем при редактировании
     }
 
     saveCache();
@@ -490,15 +527,28 @@ loadGithubBtn?.addEventListener("click", async ()=>{
   try{
     loadGithubBtn.disabled = true;
     loadGithubBtn.textContent = "Загружаю...";
+
+    // pages first
+    const pages = await pagesGetFile();
+    if(pages && Array.isArray(pages.banks)){
+      banks = normalizeBanks(pages.banks);
+      ensureOrderFields();
+      saveCache();
+      render();
+      alert("Загружено из GitHub Pages.");
+      return;
+    }
+
+    // fallback api
     const { data } = await githubGetFile();
     banks = normalizeBanks(data?.banks || []);
     ensureOrderFields();
     saveCache();
     render();
-    alert("Загружено из GitHub.");
+    alert("Загружено из GitHub API.");
   }catch(e){
     console.error(e);
-    alert("Ошибка загрузки из GitHub: " + e.message);
+    alert("Ошибка загрузки: " + e.message);
   }finally{
     loadGithubBtn.disabled = false;
     loadGithubBtn.textContent = "Загрузить из GitHub";
@@ -507,7 +557,7 @@ loadGithubBtn?.addEventListener("click", async ()=>{
 
 saveGithubBtn?.addEventListener("click", async ()=>{
   try{
-    if(!GITHUB_TOKEN || GITHUB_TOKEN === "PASTE_YOUR_TOKEN") {
+    if(!GITHUB_TOKEN || GITHUB_TOKEN.includes("PASTE")) {
       alert("Вставь GitHub token в js/app.js (GITHUB_TOKEN).");
       return;
     }
@@ -519,7 +569,7 @@ saveGithubBtn?.addEventListener("click", async ()=>{
 
     saveGithubBtn.textContent = "Сохранено ✓";
     setTimeout(()=> saveGithubBtn.textContent = "Сохранить в GitHub", 1200);
-    alert("Сохранено в GitHub. Обновление Pages может занять немного времени.");
+    alert("Сохранено в GitHub. GitHub Pages может обновляться 10–60 секунд.");
   }catch(e){
     console.error(e);
     alert("Ошибка сохранения в GitHub: " + e.message);
@@ -538,17 +588,18 @@ orderBtn?.addEventListener("click", ()=>{
 
   if(reorderMode){
     enableReorder();
-    orderIconEdit.style.display = "none";
-    orderIconDone.style.display = "block";
+    if(orderIconEdit) orderIconEdit.style.display = "none";
+    if(orderIconDone) orderIconDone.style.display = "block";
   }else{
     disableReorder();
     render();
-    orderIconEdit.style.display = "block";
-    orderIconDone.style.display = "none";
+    if(orderIconEdit) orderIconEdit.style.display = "block";
+    if(orderIconDone) orderIconDone.style.display = "none";
   }
 });
 
 // ====== init ======
-loadCache();
-ensureOrderFields();
-render();
+(async function init(){
+  await autoLoadState();
+  render();
+})();
