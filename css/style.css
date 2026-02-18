@@ -391,3 +391,29 @@ body{
 .searchRow{
   display:none !important;
 }
+
+.iconBtn{
+  width:42px;
+  height:42px;
+  display:grid;
+  place-items:center;
+  border-radius:12px;
+  border:1px solid rgba(43,58,85,.85);
+  background: rgba(30,42,66,.75);
+  cursor:pointer;
+  transition:.15s;
+}
+
+.iconBtn:hover{
+  background: rgba(36,54,84,.85);
+  border-color: rgba(63,91,135,.9);
+}
+
+.iconBtn svg{
+  width:18px;
+  height:18px;
+  stroke:white;
+  stroke-width:2;
+  fill:none;
+  opacity:.9;
+}
