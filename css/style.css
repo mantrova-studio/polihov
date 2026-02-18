@@ -308,3 +308,15 @@ body{
   color: rgba(192,75,75,1);
   font-size:13px;
 }
+
+@media (max-width: 480px) {
+
+  .controls {
+     flex-direction: column;
+  }
+
+  .controls button {
+     width: 100%;
+  }
+
+}
