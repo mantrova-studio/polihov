@@ -115,7 +115,7 @@ body{
   border-color: rgba(192,75,75,.9);
 }
 
-.iconBtn{
+/*.iconBtn{
   width:40px;
   height:40px;
   display:grid;
@@ -125,7 +125,7 @@ body{
   background: rgba(30,42,66,.75);
   color:#fff;
   cursor:pointer;
-}
+}*/
 .iconBtn:hover{ background: rgba(36,54,84,.85); border-color: rgba(63,91,135,.9); }
 .lockDot{
   width:10px; height:10px;
