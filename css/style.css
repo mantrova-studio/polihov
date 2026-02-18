@@ -68,18 +68,22 @@ body{
 }
 
 .controls{
-  display:flex;
+  display:grid;
   gap:10px;
   padding: 0 0 12px;
   grid-template-columns: 1fr;
-  justify-content:center;
+  justify-items:center;
+}
+
+.controls .btn{
+  width:100%;
+  max-width:260px;
 }
 
 /* ПК версия */
 @media (min-width: 768px){
   .controls{
     grid-template-columns: 1fr 1fr;
-    justify-content:center;
   }
 }
 
