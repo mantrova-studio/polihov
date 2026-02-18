@@ -83,7 +83,7 @@ body{
 /* ПК версия */
 @media (min-width: 768px){
   .controls{
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 2fr 1fr;
   }
 }
 
