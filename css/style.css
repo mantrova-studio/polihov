@@ -36,12 +36,17 @@ body{
   border-bottom: 1px solid rgba(43,58,85,.55);
 }
 
-.headerRow{
+.headerRow.{
   display:flex;
   align-items:flex-start;
   justify-content:space-between;
   gap:12px;
   padding:14px 0 10px;
+}
+
+.headerRow.center{
+  justify-content:center;
+  text-align:center;
 }
 
 .siteTitle{
@@ -309,16 +314,12 @@ body{
   font-size:13px;
 }
 
-@media (max-width: 480px) {
-
-  .controls {
-   display: grid;
-   gap: 12px;
-}
-
-.controls button {
-   width: 100%;
-max-width: 100%;
-}
-
+@media (max-width: 520px){
+  .controls{
+    display:grid;
+    grid-template-columns: 1fr;
+  }
+  .btn.small{
+    width:100%;
+  }
 }
