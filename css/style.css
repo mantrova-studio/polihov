@@ -417,3 +417,16 @@ body{
   fill:none;
   opacity:.9;
 }
+
+.saveGithubBtn{
+  position:absolute;
+  right:0;
+  top:50%;
+  transform:translateY(-50%);
+}
+.createBtn{
+  position:absolute;
+  right:0;
+  top:50%;
+  transform:translateY(-50%);
+}
