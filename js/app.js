@@ -174,7 +174,11 @@ async function githubGetFile(){
   const api = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_PATH}`;
 
   const res = await fetch(api, {
-    headers: { "Authorization": `token ${GITHUB_TOKEN}` }
+    headers: {
+  "Authorization": `Bearer ${GITHUB_TOKEN}`,
+  "Accept": "application/vnd.github+json",
+  "X-GitHub-Api-Version": "2022-11-28"
+}
   });
 
   if(!res.ok){
@@ -198,13 +202,12 @@ async function githubPutFile(newData, sha){
   };
 
   const res = await fetch(api, {
-    method: "PUT",
-    headers: {
-      "Authorization": `token ${GITHUB_TOKEN}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(body)
-  });
+  headers: {
+    "Authorization": `Bearer ${GITHUB_TOKEN}`,
+    "Accept": "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28"
+  }
+});
 
   if(!res.ok){
     const t = await res.text();
