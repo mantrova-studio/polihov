@@ -470,4 +470,5 @@ body.actionsOn .cardActions{ display:flex; }
   right:135px;
   top:65%;
   transform:translateY(-50%);
+  color: #fff;
 }
