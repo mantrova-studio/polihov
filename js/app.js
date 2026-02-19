@@ -20,6 +20,11 @@ const saveGithubBtn = document.getElementById("saveGithubBtn");
 
 const orderBtn = document.getElementById("orderBtn");
 
+// ✅ NEW: кнопка “показать/скрыть кнопки на карточках”
+const actionsBtn = document.getElementById("actionsBtn");
+const actionsIconEdit = document.getElementById("actionsIconEdit");
+const actionsIconDone = document.getElementById("actionsIconDone");
+
 const searchInput = document.getElementById("searchInput");
 const clearSearch = document.getElementById("clearSearch");
 
@@ -52,6 +57,9 @@ let editingId = null;
 // reorder mode
 let reorderMode = false;
 let sortable = null;
+
+// ✅ NEW: actions mode (показывать кнопки на карточках)
+let actionsMode = false;
 
 // ====== helpers ======
 function escapeHtml(str){
@@ -262,6 +270,20 @@ closeModal.addEventListener("click", closeModalFn);
 cancelBtn.addEventListener("click", closeModalFn);
 modalWrap.addEventListener("click", (e)=>{ if(e.target === modalWrap) closeModalFn(); });
 
+// ✅ NEW: показать/скрыть кнопки действий на карточках
+function setActionsMode(on){
+  actionsMode = !!on;
+  document.body.classList.toggle("actionsOn", actionsMode);
+
+  if(actionsIconEdit && actionsIconDone){
+    actionsIconEdit.style.display = actionsMode ? "none" : "block";
+    actionsIconDone.style.display = actionsMode ? "block" : "none";
+  }
+}
+actionsBtn?.addEventListener("click", ()=>{
+  setActionsMode(!actionsMode);
+});
+
 // ====== reorder mode ======
 function enableReorder(){
   if(sortable || !window.Sortable) return;
@@ -350,6 +372,7 @@ function renderList(){
       </div>
     `;
 
+    // Если не хочешь, чтобы в режиме порядка случайно срабатывали кнопки — скажи, добавлю блокировку.
     card.querySelector('[data-act="deposit"]').addEventListener("click", ()=>openOp("deposit", b.id));
     card.querySelector('[data-act="withdraw"]').addEventListener("click", ()=>openOp("withdraw", b.id));
     card.querySelector('[data-act="edit"]').addEventListener("click", ()=>openEdit(b.id));
@@ -601,5 +624,9 @@ orderBtn?.addEventListener("click", ()=>{
 // ====== init ======
 (async function init(){
   await autoLoadState();
+
+  // ✅ NEW: по умолчанию кнопки скрыты
+  setActionsMode(false);
+
   render();
 })();
