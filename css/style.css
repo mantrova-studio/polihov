@@ -420,6 +420,7 @@ body{
   stroke-width:2;
   fill:none;
   opacity:.9;
+  align-items:center; 
 }
 
 .saveGithubBtn{
