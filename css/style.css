@@ -475,3 +475,14 @@ body.actionsOn .cardActions{ display:flex; }
   align-items:center;      /* центр по вертикали */
   justify-content:center;  /* центр по горизонтали */
 }
+
+.actionsIconEdit {
+display:flex;
+  align-items:center;      /* центр по вертикали */
+  justify-content:center;  /* центр по горизонтали */
+}
+.actionsIconDone {
+display:flex;
+  align-items:center;      /* центр по вертикали */
+  justify-content:center;  /* центр по горизонтали */
+}
