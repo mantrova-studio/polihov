@@ -2,7 +2,7 @@
 const APP_KEY = "tsc_piggy_v2_cache";
 
 // ВАЖНО: токен будет виден в браузере.
-const GITHUB_TOKEN = "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";
+const GITHUB_TOKEN = "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";
 const GITHUB_OWNER = "mantrova-studio";
 const GITHUB_REPO  = "polihov";
 const GITHUB_PATH  = "data/piggy.json"; // файл с копилками
