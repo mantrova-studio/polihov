@@ -464,3 +464,10 @@ body.actionsOn .cardActions{ display:flex; }
   margin-top:10px;
   flex-wrap:wrap;
 }
+
+.editBtn {
+  position:absolute;
+  right:135px;
+  top:65%;
+  transform:translateY(-50%);
+}
