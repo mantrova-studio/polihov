@@ -2,7 +2,7 @@
 const APP_KEY = "tsc_piggy_v2_cache";
 
 // ВАЖНО: токен будет виден в браузере.
-const GITHUB_TOKEN = "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";
+const GITHUB_TOKEN = "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";
 const GITHUB_OWNER = "mantrova-studio";
 const GITHUB_REPO  = "polihov";
 const GITHUB_PATH  = "data/piggy.json"; // файл с копилками
@@ -195,6 +195,7 @@ async function githubPutFile(newData, sha){
   const api = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_PATH}`;
 
   const jsonText = JSON.stringify(newData, null, 2);
+
   const body = {
     message: "Update piggy.json via web",
     content: toBase64Utf8(jsonText),
@@ -202,12 +203,15 @@ async function githubPutFile(newData, sha){
   };
 
   const res = await fetch(api, {
-  headers: {
-    "Authorization": `Bearer ${GITHUB_TOKEN}`,
-    "Accept": "application/vnd.github+json",
-    "X-GitHub-Api-Version": "2022-11-28"
-  }
-});
+    method: "PUT",
+    headers: {
+      "Authorization": `Bearer ${GITHUB_TOKEN}`,
+      "Accept": "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
 
   if(!res.ok){
     const t = await res.text();
