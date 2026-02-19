@@ -451,3 +451,16 @@ body{
   color: rgba(255,255,255,.45);
   letter-spacing:.04em;
 }
+
+/* по умолчанию кнопки на карточках скрыты */
+.cardActions{ display:none; }
+
+/* когда включён режим действий — показываем */
+body.actionsOn .cardActions{ display:flex; }
+
+/* чтобы при скрытых кнопках карточка выглядела аккуратно */
+.cardActions{
+  gap:8px;
+  margin-top:10px;
+  flex-wrap:wrap;
+}
