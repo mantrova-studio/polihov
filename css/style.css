@@ -471,4 +471,7 @@ body.actionsOn .cardActions{ display:flex; }
   top:65%;
   transform:translateY(-50%);
   color: #fff;
+  display:flex;
+  align-items:center;      /* центр по вертикали */
+  justify-content:center;  /* центр по горизонтали */
 }
