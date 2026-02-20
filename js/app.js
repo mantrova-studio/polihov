@@ -21,8 +21,10 @@ const loadGithubBtn = document.getElementById("loadGithubBtn");
 const saveGithubBtn = document.getElementById("saveGithubBtn");
 
 const orderBtn = document.getElementById("orderBtn");
+const orderIconEdit = document.getElementById("orderIconEdit");
+const orderIconDone = document.getElementById("orderIconDone");
 
-// ✅ кнопка “показать/скрыть кнопки на карточках”
+// show/hide card actions
 const actionsBtn = document.getElementById("actionsBtn");
 const actionsIconEdit = document.getElementById("actionsIconEdit");
 const actionsIconDone = document.getElementById("actionsIconDone");
@@ -48,6 +50,23 @@ const f_start = document.getElementById("f_start");
 const f_bank = document.getElementById("f_bank");
 const f_amount = document.getElementById("f_amount");
 
+// token modal DOM (from HTML)
+const tokenWrap = document.getElementById("tokenWrap");
+const tokenClose = document.getElementById("tokenClose");
+const tokenCancel = document.getElementById("tokenCancel");
+const tokenTest = document.getElementById("tokenTest");
+const tokenOk = document.getElementById("tokenOk");
+const tokenInput = document.getElementById("tokenInput");
+const tokenRemember = document.getElementById("tokenRemember");
+const tokenError = document.getElementById("tokenError");
+
+// toast DOM
+const toastWrap = document.getElementById("toastWrap");
+const toastIcon = document.getElementById("toastIcon");
+const toastTitle = document.getElementById("toastTitle");
+const toastMsg = document.getElementById("toastMsg");
+const toastClose = document.getElementById("toastClose");
+
 // ====== STATE ======
 let banks = [];
 let filtered = [];
@@ -60,8 +79,93 @@ let editingId = null;
 let reorderMode = false;
 let sortable = null;
 
-// actions mode (показывать кнопки на карточках)
+// actions mode
 let actionsMode = false;
+
+// ====== icons ======
+const ICON_SAVE_NORMAL = `
+  <svg viewBox="0 0 24 24">
+    <path d="M20 17.5a4.5 4.5 0 0 0-3.5-7.4 5.5 5.5 0 0 0-10.6 1.5A4 4 0 0 0 6 19h13a3 3 0 0 0 1-1.5z"/>
+  </svg>
+`;
+const ICON_CLOCK = `
+  <svg viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="9"/>
+    <line x1="12" y1="7" x2="12" y2="12"/>
+    <line x1="12" y1="12" x2="16" y2="14"/>
+  </svg>
+`;
+const ICON_CHECK = `
+  <svg viewBox="0 0 24 24">
+    <line x1="20" y1="6" x2="9" y2="17"/>
+    <line x1="9" y1="17" x2="4" y2="12"/>
+  </svg>
+`;
+const TOAST_ICONS = {
+  info: `
+    <svg viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="9"/>
+      <line x1="12" y1="10" x2="12" y2="16"/>
+      <line x1="12" y1="7" x2="12.01" y2="7"/>
+    </svg>`,
+  ok: ICON_CHECK,
+  warn: `
+    <svg viewBox="0 0 24 24">
+      <path d="M10.3 4.6L2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.6a2 2 0 0 0-3.4 0z"/>
+      <line x1="12" y1="9" x2="12" y2="13"/>
+      <line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg>`,
+  err: `
+    <svg viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="9"/>
+      <line x1="15" y1="9" x2="9" y2="15"/>
+      <line x1="9" y1="9" x2="15" y2="15"/>
+    </svg>`
+};
+
+function setSaveBtnState(state){
+  if(!saveGithubBtn) return;
+  if(state === "saving"){
+    saveGithubBtn.innerHTML = ICON_CLOCK;
+    saveGithubBtn.disabled = true;
+    return;
+  }
+  if(state === "done"){
+    saveGithubBtn.innerHTML = ICON_CHECK;
+    saveGithubBtn.disabled = false;
+    return;
+  }
+  saveGithubBtn.innerHTML = ICON_SAVE_NORMAL;
+  saveGithubBtn.disabled = false;
+}
+
+// ====== toast ======
+let toastTmr = null;
+
+function showToast({ type="info", title="Сообщение", message="", ms=2600 } = {}){
+  if(!toastWrap) { alert(`${title}\n\n${message}`); return; }
+
+  toastIcon.innerHTML = TOAST_ICONS[type] || TOAST_ICONS.info;
+  toastTitle.textContent = title;
+  toastMsg.textContent = message;
+
+  toastWrap.classList.add("open");
+  toastWrap.setAttribute("aria-hidden","false");
+
+  if(toastTmr) clearTimeout(toastTmr);
+  toastTmr = setTimeout(hideToast, ms);
+}
+
+function hideToast(){
+  if(!toastWrap) return;
+  toastWrap.classList.remove("open");
+  toastWrap.setAttribute("aria-hidden","true");
+  if(toastTmr) clearTimeout(toastTmr);
+  toastTmr = null;
+}
+
+toastClose?.addEventListener("click", hideToast);
+toastWrap?.addEventListener("click", (e)=>{ if(e.target === toastWrap) hideToast(); });
 
 // ====== helpers ======
 function escapeHtml(str){
@@ -153,7 +257,6 @@ function normalizeBanks(list){
   return Array.from(map.values());
 }
 
-// если у старых копилок нет order/createdAt — назначаем один раз
 function ensureOrderFields(){
   const now = Date.now();
   let changed = false;
@@ -181,6 +284,7 @@ function ghHeaders(token){
 
 async function githubGetFile(token){
   const api = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_PATH}`;
+
   const res = await fetch(api, { headers: ghHeaders(token) });
 
   if(!res.ok){
@@ -205,7 +309,10 @@ async function githubPutFile(newData, sha, token){
 
   const res = await fetch(api, {
     method: "PUT",
-    headers: { ...ghHeaders(token), "Content-Type": "application/json" },
+    headers: {
+      ...ghHeaders(token),
+      "Content-Type": "application/json"
+    },
     body: JSON.stringify(body)
   });
 
@@ -217,7 +324,6 @@ async function githubPutFile(newData, sha, token){
   return await res.json();
 }
 
-// GitHub Pages (без токена)
 async function pagesGetFile(){
   const url = `${GITHUB_PATH}?v=${Date.now()}`;
   const res = await fetch(url, { cache: "no-store" });
@@ -225,7 +331,7 @@ async function pagesGetFile(){
   return await res.json();
 }
 
-// ====== Автозагрузка (Pages -> Cache) ======
+// ====== autoload (Pages -> Cache) ======
 async function autoLoadState(){
   try{
     const pages = await pagesGetFile();
@@ -242,52 +348,121 @@ async function autoLoadState(){
   return { from: ok ? "cache" : "empty" };
 }
 
-// ====== Token modal ======
+// ====== token modal logic (uses your HTML modal) ======
 function getSavedToken(){
   return sessionStorage.getItem(TOKEN_SESSION_KEY)
     || localStorage.getItem(TOKEN_LOCAL_KEY)
     || "";
 }
+
+function saveToken(token, remember){
+  if(remember){
+    localStorage.setItem(TOKEN_LOCAL_KEY, token);
+    sessionStorage.removeItem(TOKEN_SESSION_KEY);
+  }else{
+    sessionStorage.setItem(TOKEN_SESSION_KEY, token);
+    localStorage.removeItem(TOKEN_LOCAL_KEY);
+  }
+}
+
 function clearSavedToken(){
   sessionStorage.removeItem(TOKEN_SESSION_KEY);
   localStorage.removeItem(TOKEN_LOCAL_KEY);
 }
 
-// используем модалку из index.html (#tokenWrap)
-function openTokenModal({ errorText = "" } = {}){
-  const wrap = document.getElementById("tokenWrap");
-  const input = document.getElementById("tokenInput");
-  const remember = document.getElementById("tokenRemember");
-  const err = document.getElementById("tokenError");
+function tokenSetMessage(msg, ok=false){
+  if(!tokenError) return;
+  tokenError.textContent = msg || "";
+  tokenError.style.display = msg ? "block" : "none";
+  tokenError.classList.toggle("ok", !!ok);
+}
 
-  if(!wrap || !input || !remember || !err) return;
+function openTokenModal({ prefill="" } = {}){
+  if(!tokenWrap) return;
 
-  wrap.classList.add("open");
-  wrap.setAttribute("aria-hidden","false");
+  tokenWrap.classList.add("open");
+  tokenWrap.setAttribute("aria-hidden","false");
 
-  input.value = getSavedToken() || "";
-  remember.checked = !!localStorage.getItem(TOKEN_LOCAL_KEY);
+  tokenSetMessage("", false);
 
-  if(errorText){
-    err.style.display = "block";
-    err.textContent = errorText;
-  }else{
-    err.style.display = "none";
-    err.textContent = "";
-  }
+  const saved = getSavedToken();
+  tokenInput.value = prefill || saved || "";
+  tokenRemember.checked = !!localStorage.getItem(TOKEN_LOCAL_KEY);
 
-  setTimeout(()=>input.focus(), 60);
+  setTimeout(()=> tokenInput.focus(), 60);
 }
 
 function closeTokenModal(){
-  const wrap = document.getElementById("tokenWrap");
-  if(!wrap) return;
-  wrap.classList.remove("open");
-  wrap.setAttribute("aria-hidden","true");
+  if(!tokenWrap) return;
+  tokenWrap.classList.remove("open");
+  tokenWrap.setAttribute("aria-hidden","true");
+}
+
+tokenClose?.addEventListener("click", closeTokenModal);
+tokenCancel?.addEventListener("click", closeTokenModal);
+tokenWrap?.addEventListener("click", (e)=>{ if(e.target === tokenWrap) closeTokenModal(); });
+
+document.addEventListener("keydown", (e)=>{
+  if(e.key === "Escape" && tokenWrap?.classList.contains("open")) closeTokenModal();
+});
+
+tokenTest?.addEventListener("click", async ()=>{
+  try{
+    const token = (tokenInput.value || "").trim();
+    if(!token){
+      tokenSetMessage("Вставь токен для проверки.", false);
+      return;
+    }
+    tokenSetMessage("Проверяю...", true);
+    await githubGetFile(token);
+    tokenSetMessage("Токен ОК ✅ Есть доступ к файлу.", true);
+  }catch(e){
+    tokenSetMessage("Токен не подошёл ❌\n\n" + (e?.message || ""), false);
+  }
+});
+
+function askTokenOnce(){
+  return new Promise((resolve)=>{
+    openTokenModal();
+
+    const onOk = ()=>{
+      const token = (tokenInput.value || "").trim();
+      if(!token){
+        tokenSetMessage("Вставь токен.", false);
+        return;
+      }
+      saveToken(token, !!tokenRemember.checked);
+      closeTokenModal();
+      cleanup();
+      resolve(token);
+    };
+
+    const onCancel = ()=>{
+      closeTokenModal();
+      cleanup();
+      resolve(null);
+    };
+
+    const onKey = (e)=>{
+      if(!tokenWrap.classList.contains("open")) return;
+      if(e.key === "Enter") onOk();
+    };
+
+    const cleanup = ()=>{
+      tokenOk?.removeEventListener("click", onOk);
+      tokenCancel?.removeEventListener("click", onCancel);
+      tokenClose?.removeEventListener("click", onCancel);
+      document.removeEventListener("keydown", onKey);
+    };
+
+    tokenOk?.addEventListener("click", onOk);
+    tokenCancel?.addEventListener("click", onCancel);
+    tokenClose?.addEventListener("click", onCancel);
+    document.addEventListener("keydown", onKey);
+  });
 }
 
 async function ensureValidToken(){
-  // 1) пробуем сохранённый
   const saved = getSavedToken();
   if(saved){
     try{
@@ -298,103 +473,23 @@ async function ensureValidToken(){
     }
   }
 
-  // 2) спросим у пользователя через модалку
-  return await new Promise((resolve)=>{
-    const wrap = document.getElementById("tokenWrap");
-    const input = document.getElementById("tokenInput");
-    const remember = document.getElementById("tokenRemember");
-    const err = document.getElementById("tokenError");
+  // ask until ok or cancel
+  while(true){
+    const token = await askTokenOnce();
+    if(!token) return null;
 
-    const btnClose  = document.getElementById("tokenClose");
-    const btnCancel = document.getElementById("tokenCancel");
-    const btnTest   = document.getElementById("tokenTest");
-    const btnOk     = document.getElementById("tokenOk");
-
-    if(!wrap || !input || !remember || !err || !btnCancel || !btnOk){
-      resolve(null);
-      return;
+    try{
+      await githubGetFile(token);
+      return token;
+    }catch(e){
+      tokenSetMessage("Токен не подошёл ❌\n\n" + (e?.message || ""), false);
+      openTokenModal({ prefill: token });
+      // ждём снова
     }
-
-    const cleanup = ()=>{
-      btnClose?.removeEventListener("click", onCancel);
-      btnCancel.removeEventListener("click", onCancel);
-      wrap.removeEventListener("click", onBackdrop);
-      input.removeEventListener("keydown", onKey);
-      btnTest?.removeEventListener("click", onTest);
-      btnOk.removeEventListener("click", onOk);
-    };
-
-    const showErr = (msg)=>{
-      err.style.display = "block";
-      err.textContent = msg || "Ошибка";
-    };
-
-    const saveToken = (token)=>{
-      if(remember.checked){
-        localStorage.setItem(TOKEN_LOCAL_KEY, token);
-        sessionStorage.removeItem(TOKEN_SESSION_KEY);
-      }else{
-        sessionStorage.setItem(TOKEN_SESSION_KEY, token);
-        localStorage.removeItem(TOKEN_LOCAL_KEY);
-      }
-    };
-
-    const onCancel = ()=>{
-      closeTokenModal();
-      cleanup();
-      resolve(null);
-    };
-
-    const onBackdrop = (e)=>{
-      if(e.target === wrap) onCancel();
-    };
-
-    const onKey = (e)=>{
-      if(e.key === "Escape") onCancel();
-      if(e.key === "Enter") btnOk.click();
-    };
-
-    const onTest = async ()=>{
-      const token = (input.value || "").trim();
-      if(!token) return showErr("Вставь токен.");
-      try{
-        await githubGetFile(token);
-        err.style.display = "block";
-        err.textContent = "✅ Токен рабочий.";
-      }catch(e){
-        showErr("❌ Токен не подошёл.\n" + (e?.message || ""));
-      }
-    };
-
-    const onOk = async ()=>{
-      const token = (input.value || "").trim();
-      if(!token) return showErr("Вставь токен.");
-
-      try{
-        await githubGetFile(token);
-        saveToken(token);
-        closeTokenModal();
-        cleanup();
-        resolve(token);
-      }catch(e){
-        showErr("❌ Токен не подошёл (или нет прав).\n" + (e?.message || ""));
-      }
-    };
-
-    // открыть модалку
-    openTokenModal();
-
-    // навешиваем обработчики
-    btnClose?.addEventListener("click", onCancel);
-    btnCancel.addEventListener("click", onCancel);
-    wrap.addEventListener("click", onBackdrop);
-    input.addEventListener("keydown", onKey);
-    btnTest?.addEventListener("click", onTest);
-    btnOk.addEventListener("click", onOk);
-  });
+  }
 }
 
-// ====== UI ======
+// ====== UI (main modal) ======
 function openModal(title){
   modalTitle.textContent = title;
   modalWrap.classList.add("open");
@@ -409,7 +504,7 @@ closeModal?.addEventListener("click", closeModalFn);
 cancelBtn?.addEventListener("click", closeModalFn);
 modalWrap?.addEventListener("click", (e)=>{ if(e.target === modalWrap) closeModalFn(); });
 
-// показать/скрыть кнопки действий
+// ====== show/hide actions ======
 function setActionsMode(on){
   actionsMode = !!on;
   document.body.classList.toggle("actionsOn", actionsMode);
@@ -438,9 +533,7 @@ function enableReorder(){
       cards.forEach((card, idx) => {
         const id = card.dataset.id;
         const b = banks.find(x => x.id === id);
-        if(b){
-          b.order = base + (total - idx);
-        }
+        if(b) b.order = base + (total - idx);
       });
 
       saveCache();
@@ -482,7 +575,6 @@ function renderList(){
     card.className = "card";
     card.dataset.id = b.id;
 
-    // ✅ квадратные кнопки-иконки
     card.innerHTML = `
       <div class="cardTop">
         <div>
@@ -502,39 +594,10 @@ function renderList(){
       </div>
 
       <div class="cardActions">
-        <button class="iconAct primary" data-act="deposit" title="Пополнить" aria-label="Пополнить">
-          <svg viewBox="0 0 24 24">
-            <line x1="12" y1="5" x2="12" y2="19"/>
-            <line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-        </button>
-
-        <button class="iconAct danger" data-act="withdraw" title="Вывести" aria-label="Вывести">
-          <svg viewBox="0 0 24 24">
-            <line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-        </button>
-
-        <button class="iconAct" data-act="edit" title="Изменить" aria-label="Изменить">
-          <svg viewBox="0 0 24 24">
-            <line x1="4" y1="20" x2="8" y2="19"/>
-            <line x1="8" y1="19" x2="19" y2="8"/>
-            <line x1="19" y1="8" x2="16" y2="5"/>
-            <line x1="16" y1="5" x2="5" y2="16"/>
-          </svg>
-        </button>
-
-        <button class="iconAct dangerOutline" data-act="delete" title="Удалить" aria-label="Удалить">
-          <svg viewBox="0 0 24 24">
-            <line x1="4" y1="7" x2="20" y2="7"/>
-            <line x1="9" y1="7" x2="9" y2="5"/>
-            <line x1="15" y1="7" x2="15" y2="5"/>
-            <line x1="7" y1="7" x2="8" y2="20"/>
-            <line x1="17" y1="7" x2="16" y2="20"/>
-            <line x1="10" y1="11" x2="10" y2="18"/>
-            <line x1="14" y1="11" x2="14" y2="18"/>
-          </svg>
-        </button>
+        <button class="btn small primary" data-act="deposit">Пополнить</button>
+        <button class="btn small danger" data-act="withdraw">Вывести</button>
+        <button class="btn small" data-act="edit">Изменить</button>
+        <button class="btn small" data-act="delete">Удалить</button>
       </div>
     `;
 
@@ -549,9 +612,7 @@ function renderList(){
   if(reorderMode) enableReorder();
 }
 
-function render(){
-  applyFilter();
-}
+function render(){ applyFilter(); }
 
 // ====== actions ======
 function openCreate(){
@@ -583,7 +644,7 @@ function openEdit(id){
 }
 
 function openOp(type, id=null){
-  modalMode = type; // deposit | withdraw
+  modalMode = type;
   createForm.style.display = "none";
   opForm.style.display = "block";
 
@@ -614,20 +675,17 @@ function saveFromModal(){
     const goalRaw = (f_goal.value || "").trim();
     const startRaw = (f_start.value || "").trim();
 
-    if(!name){
-      alert("Введите название копилки.");
-      return;
-    }
+    if(!name){ showToast({ type:"warn", title:"Проверь", message:"Введите название копилки." }); return; }
 
     const goal = goalRaw ? parseNum(goalRaw) : null;
     if(goalRaw && (goal === null || goal <= 0)){
-      alert("Цель должна быть числом больше 0, либо оставьте пустым.");
+      showToast({ type:"warn", title:"Проверь", message:"Цель должна быть числом больше 0, либо оставьте пустым." });
       return;
     }
 
     const start = startRaw ? parseNum(startRaw) : 0;
     if(start === null || start < 0){
-      alert("Стартовая сумма должна быть числом 0 или больше.");
+      showToast({ type:"warn", title:"Проверь", message:"Стартовая сумма должна быть числом 0 или больше." });
       return;
     }
 
@@ -651,21 +709,15 @@ function saveFromModal(){
 
   if(modalMode === "deposit" || modalMode === "withdraw"){
     if(!banks.length){
-      alert("Сначала создай копилку.");
+      showToast({ type:"warn", title:"Нет копилок", message:"Сначала создай копилку." });
       return;
     }
 
     const id = f_bank.value;
     const amt = parseNum(f_amount.value);
 
-    if(!id){
-      alert("Выберите копилку.");
-      return;
-    }
-    if(amt === null || amt <= 0){
-      alert("Введите сумму больше 0.");
-      return;
-    }
+    if(!id){ showToast({ type:"warn", title:"Проверь", message:"Выберите копилку." }); return; }
+    if(amt === null || amt <= 0){ showToast({ type:"warn", title:"Проверь", message:"Введите сумму больше 0." }); return; }
 
     const b = banks.find(x => x.id === id);
     if(!b) return;
@@ -694,7 +746,7 @@ withdrawBtn?.addEventListener("click", ()=>{
 
 // ====== search ======
 if(clearSearch) clearSearch.style.display = "none";
-function syncClear(){ if(clearSearch) clearSearch.style.display = searchInput.value ? "block" : "none"; }
+function syncClear(){ if(clearSearch) clearSearch.style.display = searchInput?.value ? "block" : "none"; }
 
 searchInput?.addEventListener("input", ()=>{
   query = searchInput.value;
@@ -722,18 +774,21 @@ loadGithubBtn?.addEventListener("click", async ()=>{
       ensureOrderFields();
       saveCache();
       render();
-      alert("Загружено из GitHub Pages.");
+      showToast({ type:"ok", title:"Загружено", message:"Данные взяты из GitHub Pages." });
       return;
     }
 
-    // если Pages пусто — грузим из кеша
     const ok = loadCache();
     ensureOrderFields();
     render();
-    alert(ok ? "На Pages пока пусто. Показал локальный кеш." : "На Pages пока пусто и кеш пустой.");
+    showToast({
+      type: ok ? "info" : "warn",
+      title:"Pages пусто",
+      message: ok ? "Показал локальный кеш." : "На Pages пусто и кеш пустой."
+    });
   }catch(e){
     console.error(e);
-    alert("Ошибка загрузки: " + e.message);
+    showToast({ type:"err", title:"Ошибка загрузки", message: e?.message || "Не удалось загрузить." });
   }finally{
     loadGithubBtn.disabled = false;
     loadGithubBtn.textContent = "Загрузить из GitHub";
@@ -742,36 +797,35 @@ loadGithubBtn?.addEventListener("click", async ()=>{
 
 saveGithubBtn?.addEventListener("click", async ()=>{
   try{
-    saveGithubBtn.disabled = true;
-    saveGithubBtn.textContent = "Готовлю...";
+    setSaveBtnState("saving");
 
     const token = await ensureValidToken();
     if(!token){
-      saveGithubBtn.textContent = "Сохранить в GitHub";
+      setSaveBtnState("normal");
+      showToast({ type:"info", title:"Отменено", message:"Сохранение отменено." });
       return;
     }
 
-    saveGithubBtn.textContent = "Сохраняю...";
-
-    const cur = await githubGetFile(token); // sha
+    const cur = await githubGetFile(token);
     await githubPutFile({ banks }, cur.sha, token);
 
-    saveGithubBtn.textContent = "Сохранено ✓";
-    setTimeout(()=> saveGithubBtn.textContent = "Сохранить в GitHub", 1200);
-    alert("Сохранено в GitHub. GitHub Pages может обновляться 10–60 секунд.");
+    setSaveBtnState("done");
+    showToast({
+      type:"ok",
+      title:"Сохранено",
+      message:"Данные сохранены в GitHub.\nPages может обновляться 10–60 секунд.",
+      ms: 3200
+    });
+
+    setTimeout(()=> setSaveBtnState("normal"), 1200);
   }catch(e){
     console.error(e);
-    alert("Ошибка сохранения в GitHub: " + e.message);
-    saveGithubBtn.textContent = "Сохранить в GitHub";
-  }finally{
-    saveGithubBtn.disabled = false;
+    setSaveBtnState("normal");
+    showToast({ type:"err", title:"Ошибка сохранения", message: e?.message || "Не удалось сохранить." , ms: 4500});
   }
 });
 
 // ====== Order button ======
-const orderIconEdit = document.getElementById("orderIconEdit");
-const orderIconDone = document.getElementById("orderIconDone");
-
 orderBtn?.addEventListener("click", ()=>{
   reorderMode = !reorderMode;
 
@@ -779,19 +833,24 @@ orderBtn?.addEventListener("click", ()=>{
     enableReorder();
     if(orderIconEdit) orderIconEdit.style.display = "none";
     if(orderIconDone) orderIconDone.style.display = "block";
+    showToast({ type:"info", title:"Порядок", message:"Перетаскивай карточки, чтобы поменять порядок." });
   }else{
     disableReorder();
     render();
     if(orderIconEdit) orderIconEdit.style.display = "block";
     if(orderIconDone) orderIconDone.style.display = "none";
+    showToast({ type:"ok", title:"Готово", message:"Порядок сохранён локально." });
   }
 });
 
 // ====== init ======
 (async function init(){
+  // init save icon state (in case HTML differs)
+  setSaveBtnState("normal");
+
   await autoLoadState();
 
-  // по умолчанию кнопки скрыты
+  // default: actions hidden
   setActionsMode(false);
 
   render();
