@@ -1,11 +1,13 @@
-// ====== SETTINGS (GitHub) ====== 
+// ====== SETTINGS (GitHub) ======
 const APP_KEY = "tsc_piggy_v2_cache";
 
-// ВАЖНО: токен будет виден в браузере.
-const GITHUB_TOKEN = "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";
 const GITHUB_OWNER = "mantrova-studio";
 const GITHUB_REPO  = "polihov";
 const GITHUB_PATH  = "data/piggy.json"; // файл с копилками
+
+// ====== Token storage ======
+const TOKEN_SESSION_KEY = "tsc_piggy_github_token_session_v1";
+const TOKEN_LOCAL_KEY   = "tsc_piggy_github_token_local_v1";
 
 // ====== DOM ======
 const grid = document.getElementById("grid");
@@ -169,16 +171,20 @@ function toBase64Utf8(str){
   return btoa(unescape(encodeURIComponent(str)));
 }
 
+function ghHeaders(token){
+  return {
+    "Authorization": `Bearer ${token}`,
+    "Accept": "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28"
+  };
+}
+
 // 1) Чтение через GitHub API (нужен токен)
-async function githubGetFile(){
+async function githubGetFile(token){
   const api = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_PATH}`;
 
   const res = await fetch(api, {
-    headers: {
-  "Authorization": `Bearer ${GITHUB_TOKEN}`,
-  "Accept": "application/vnd.github+json",
-  "X-GitHub-Api-Version": "2022-11-28"
-}
+    headers: ghHeaders(token)
   });
 
   if(!res.ok){
@@ -191,9 +197,8 @@ async function githubGetFile(){
   return { data: JSON.parse(content), sha: json.sha };
 }
 
-async function githubPutFile(newData, sha){
+async function githubPutFile(newData, sha, token){
   const api = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_PATH}`;
-
   const jsonText = JSON.stringify(newData, null, 2);
 
   const body = {
@@ -205,9 +210,7 @@ async function githubPutFile(newData, sha){
   const res = await fetch(api, {
     method: "PUT",
     headers: {
-      "Authorization": `Bearer ${GITHUB_TOKEN}`,
-      "Accept": "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
+      ...ghHeaders(token),
       "Content-Type": "application/json"
     },
     body: JSON.stringify(body)
@@ -223,14 +226,13 @@ async function githubPutFile(newData, sha){
 
 // 2) Чтение через GitHub Pages (без токена) — это то, что работает в инкогнито
 async function pagesGetFile(){
-  // cache bust, чтобы не ловить старый кэш
   const url = `${GITHUB_PATH}?v=${Date.now()}`;
   const res = await fetch(url, { cache: "no-store" });
   if(!res.ok) return null;
   return await res.json();
 }
 
-// ====== Автозагрузка (Pages -> API -> Cache) ======
+// ====== Автозагрузка (Pages -> Cache) ======
 async function autoLoadState(){
   // Сначала пробуем GitHub Pages
   try{
@@ -243,23 +245,313 @@ async function autoLoadState(){
     }
   }catch{}
 
-  // Потом пробуем GitHub API (если есть токен)
-  try{
-    if(GITHUB_TOKEN && !GITHUB_TOKEN.includes("PASTE")){
-      const { data } = await githubGetFile();
-      if(data && typeof data === "object" && Array.isArray(data.banks)){
-        banks = normalizeBanks(data.banks);
-        ensureOrderFields();
-        saveCache();
-        return { from: "api" };
-      }
-    }
-  }catch{}
-
   // Иначе берём локальный кеш
   const ok = loadCache();
   ensureOrderFields();
   return { from: ok ? "cache" : "empty" };
+}
+
+// ====== Token modal (TSC style) ======
+function getSavedToken(){
+  return sessionStorage.getItem(TOKEN_SESSION_KEY)
+    || localStorage.getItem(TOKEN_LOCAL_KEY)
+    || "";
+}
+
+function clearSavedToken(){
+  sessionStorage.removeItem(TOKEN_SESSION_KEY);
+  localStorage.removeItem(TOKEN_LOCAL_KEY);
+}
+
+function injectTokenModalOnce(){
+  if(document.getElementById("tokenWrap")) return;
+
+  const style = document.createElement("style");
+  style.textContent = `
+    .tokenWrap{
+      position:fixed; inset:0;
+      display:none; align-items:center; justify-content:center;
+      padding:16px; z-index:99999;
+      background: rgba(0,0,0,.72);
+    }
+    .tokenWrap.open{ display:flex; }
+    .tokenModal{
+      width:min(560px, 100%);
+      background: rgba(18,26,42,.92);
+      border: 1px solid rgba(43,58,85,.9);
+      border-radius: 16px;
+      box-shadow: 0 18px 60px rgba(0,0,0,.55);
+      overflow:hidden;
+    }
+    .tokenHead{ padding:14px 14px 0; }
+    .tokenTitle{ font-size:18px; font-weight:900; }
+    .tokenSub{ margin-top:6px; color: rgba(255,255,255,.55); font-size:13px; line-height:1.35; }
+    .tokenBody{ padding:14px; }
+    .tokenLabel{ display:block; font-size:12px; color: rgba(255,255,255,.55); margin:0 0 6px; }
+    .tokenInput{
+      width:100%;
+      padding: 11px 12px;
+      border-radius: 12px;
+      border:1px solid rgba(43,58,85,.85);
+      background: rgba(0,0,0,.25);
+      color:#fff;
+      outline:none;
+    }
+    .tokenRow{
+      display:flex; align-items:center; justify-content:space-between;
+      gap:10px; margin-top:10px; flex-wrap:wrap;
+    }
+    .tokenCheck{
+      display:flex; align-items:center; gap:8px;
+      color: rgba(255,255,255,.7);
+      font-size:13px;
+      user-select:none;
+    }
+    .tokenErr{
+      margin-top:10px;
+      color: rgba(192,75,75,1);
+      font-size:13px;
+      display:none;
+      white-space: pre-wrap;
+    }
+    .tokenActions{
+      display:flex; gap:10px; justify-content:flex-end; margin-top:12px;
+    }
+    .tokenBtn{
+      border:1px solid rgba(43,58,85,.85);
+      background: rgba(30,42,66,.75);
+      color:#fff;
+      padding: 10px 14px;
+      border-radius: 12px;
+      cursor:pointer;
+    }
+    .tokenBtn:hover{ background: rgba(36,54,84,.85); border-color: rgba(63,91,135,.9); }
+    .tokenBtn.primary{
+      background: rgba(63,91,135,.9);
+      border-color: rgba(63,91,135,.95);
+    }
+    .tokenBtn.primary:hover{ background: rgba(77,110,160,.95); }
+    .tokenTiny{ margin-top:10px; font-size:12px; color: rgba(255,255,255,.55); line-height:1.35; }
+    .tokenLink{
+      color: rgba(255,255,255,.75);
+      text-decoration: underline;
+      cursor:pointer;
+    }
+  `;
+  document.head.appendChild(style);
+
+  const wrap = document.createElement("div");
+  wrap.className = "tokenWrap";
+  wrap.id = "tokenWrap";
+  wrap.setAttribute("aria-hidden","true");
+  wrap.innerHTML = `
+    <div class="tokenModal" role="dialog" aria-modal="true">
+      <div class="tokenHead">
+        <div class="tokenTitle">GitHub токен</div>
+        <div class="tokenSub">
+          Введи Personal Access Token (classic или fine-grained) с правами записи в репозиторий.
+          Токен нужен только для <b>сохранения</b>.
+        </div>
+      </div>
+
+      <div class="tokenBody">
+        <label class="tokenLabel" for="tokenInput">Токен</label>
+        <input id="tokenInput" class="tokenInput" type="password" placeholder="github_pat_..." autocomplete="off"/>
+
+        <div class="tokenRow">
+          <label class="tokenCheck">
+            <input id="tokenRemember" type="checkbox" />
+            Запомнить на этом устройстве
+          </label>
+          <span class="tokenLink" id="tokenClear">Сбросить сохранённый</span>
+        </div>
+
+        <div class="tokenErr" id="tokenError"></div>
+
+        <div class="tokenActions">
+          <button class="tokenBtn" id="tokenCancel" type="button">Отмена</button>
+          <button class="tokenBtn primary" id="tokenOk" type="button">Продолжить</button>
+        </div>
+
+        <div class="tokenTiny">
+          Если токен неверный/истёк — появится ошибка. Можно вставлять заново сколько угодно.
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(wrap);
+
+  // clear token
+  wrap.querySelector("#tokenClear").addEventListener("click", ()=>{
+    clearSavedToken();
+    wrap.querySelector("#tokenInput").value = "";
+    const err = wrap.querySelector("#tokenError");
+    err.style.display = "none";
+    err.textContent = "";
+  });
+}
+
+function askToken({ title = "GitHub токен", prefill = "" } = {}){
+  injectTokenModalOnce();
+
+  const wrap = document.getElementById("tokenWrap");
+  const input = document.getElementById("tokenInput");
+  const remember = document.getElementById("tokenRemember");
+  const okBtn = document.getElementById("tokenOk");
+  const cancel = document.getElementById("tokenCancel");
+  const err = document.getElementById("tokenError");
+  const titleEl = wrap.querySelector(".tokenTitle");
+
+  titleEl.textContent = title;
+
+  function open(){
+    wrap.classList.add("open");
+    wrap.setAttribute("aria-hidden","false");
+    err.style.display = "none";
+    err.textContent = "";
+    input.value = prefill || getSavedToken() || "";
+    remember.checked = !!localStorage.getItem(TOKEN_LOCAL_KEY);
+    setTimeout(()=>input.focus(), 60);
+  }
+  function close(){
+    wrap.classList.remove("open");
+    wrap.setAttribute("aria-hidden","true");
+  }
+  function showError(msg){
+    err.textContent = msg || "Ошибка";
+    err.style.display = "block";
+  }
+
+  return new Promise((resolve)=>{
+    open();
+
+    const cleanup = ()=>{
+      okBtn.removeEventListener("click", onOk);
+      cancel.removeEventListener("click", onCancel);
+      wrap.removeEventListener("click", onBackdrop);
+      input.removeEventListener("keydown", onKey);
+    };
+
+    const onOk = ()=>{
+      const token = (input.value || "").trim();
+      if(!token){
+        showError("Вставь токен.");
+        return;
+      }
+      // save token
+      if(remember.checked){
+        localStorage.setItem(TOKEN_LOCAL_KEY, token);
+        sessionStorage.removeItem(TOKEN_SESSION_KEY);
+      }else{
+        sessionStorage.setItem(TOKEN_SESSION_KEY, token);
+        localStorage.removeItem(TOKEN_LOCAL_KEY);
+      }
+      close();
+      cleanup();
+      resolve({ token, remember: remember.checked, showError }); // showError на всякий
+    };
+
+    const onCancel = ()=>{
+      close();
+      cleanup();
+      resolve(null);
+    };
+
+    const onBackdrop = (e)=>{
+      if(e.target === wrap) onCancel();
+    };
+
+    const onKey = (e)=>{
+      if(e.key === "Enter") onOk();
+      if(e.key === "Escape") onCancel();
+    };
+
+    okBtn.addEventListener("click", onOk);
+    cancel.addEventListener("click", onCancel);
+    wrap.addEventListener("click", onBackdrop);
+    input.addEventListener("keydown", onKey);
+  });
+}
+
+// Показываем ошибку в модалке и просим токен снова
+async function ensureValidToken(){
+  // 1) берём сохранённый
+  const saved = getSavedToken();
+  if(saved){
+    // пробуем проверить токен чтением файла (быстро)
+    try{
+      await githubGetFile(saved);
+      return saved;
+    }catch{
+      // если невалиден — сбросим, чтобы не зацикливаться
+      clearSavedToken();
+    }
+  }
+
+  // 2) спрашиваем токен у пользователя, проверяем
+  while(true){
+    const res = await askToken({ title: "Токен для сохранения" });
+    if(!res) return null;
+
+    try{
+      await githubGetFile(res.token);
+      return res.token;
+    }catch(e){
+      // повторно откроем окно с ошибкой
+      injectTokenModalOnce();
+      const wrap = document.getElementById("tokenWrap");
+      const err = document.getElementById("tokenError");
+      wrap.classList.add("open");
+      wrap.setAttribute("aria-hidden","false");
+      err.style.display = "block";
+      err.textContent = "Токен не подошёл (или истёк/нет прав).\n\n" + (e?.message || "");
+      // подставим токен обратно в поле, чтобы можно было быстро поправить
+      document.getElementById("tokenInput").value = res.token || "";
+      // ждём, пока пользователь нажмёт Продолжить/Отмена
+      const again = await new Promise((resolve)=>{
+        const okBtn = document.getElementById("tokenOk");
+        const cancelBtn = document.getElementById("tokenCancel");
+        const input = document.getElementById("tokenInput");
+        const remember = document.getElementById("tokenRemember");
+
+        const cleanup = ()=>{
+          okBtn.removeEventListener("click", onOk);
+          cancelBtn.removeEventListener("click", onCancel);
+        };
+
+        const onOk = ()=>{
+          const token = (input.value || "").trim();
+          if(!token) return;
+          if(remember.checked){
+            localStorage.setItem(TOKEN_LOCAL_KEY, token);
+            sessionStorage.removeItem(TOKEN_SESSION_KEY);
+          }else{
+            sessionStorage.setItem(TOKEN_SESSION_KEY, token);
+            localStorage.removeItem(TOKEN_LOCAL_KEY);
+          }
+          wrap.classList.remove("open");
+          wrap.setAttribute("aria-hidden","true");
+          cleanup();
+          resolve(token);
+        };
+
+        const onCancel = ()=>{
+          wrap.classList.remove("open");
+          wrap.setAttribute("aria-hidden","true");
+          cleanup();
+          resolve(null);
+        };
+
+        okBtn.addEventListener("click", onOk);
+        cancelBtn.addEventListener("click", onCancel);
+      });
+
+      if(!again) return null;
+      // проверим на следующем круге
+      clearSavedToken();
+      sessionStorage.setItem(TOKEN_SESSION_KEY, again);
+    }
+  }
 }
 
 // ====== UI ======
@@ -379,7 +671,6 @@ function renderList(){
       </div>
     `;
 
-    // Если не хочешь, чтобы в режиме порядка случайно срабатывали кнопки — скажи, добавлю блокировку.
     card.querySelector('[data-act="deposit"]').addEventListener("click", ()=>openOp("deposit", b.id));
     card.querySelector('[data-act="withdraw"]').addEventListener("click", ()=>openOp("withdraw", b.id));
     card.querySelector('[data-act="edit"]').addEventListener("click", ()=>openEdit(b.id));
@@ -558,7 +849,6 @@ loadGithubBtn?.addEventListener("click", async ()=>{
     loadGithubBtn.disabled = true;
     loadGithubBtn.textContent = "Загружаю...";
 
-    // pages first
     const pages = await pagesGetFile();
     if(pages && Array.isArray(pages.banks)){
       banks = normalizeBanks(pages.banks);
@@ -569,13 +859,11 @@ loadGithubBtn?.addEventListener("click", async ()=>{
       return;
     }
 
-    // fallback api
-    const { data } = await githubGetFile();
-    banks = normalizeBanks(data?.banks || []);
+    // если Pages пусто — грузим из кеша (как резерв)
+    const ok = loadCache();
     ensureOrderFields();
-    saveCache();
     render();
-    alert("Загружено из GitHub API.");
+    alert(ok ? "На Pages пока пусто. Показал локальный кеш." : "На Pages пока пусто и кеш пустой.");
   }catch(e){
     console.error(e);
     alert("Ошибка загрузки: " + e.message);
@@ -587,15 +875,19 @@ loadGithubBtn?.addEventListener("click", async ()=>{
 
 saveGithubBtn?.addEventListener("click", async ()=>{
   try{
-    if(!GITHUB_TOKEN || GITHUB_TOKEN.includes("PASTE")) {
-      alert("Вставь GitHub token в js/app.js (GITHUB_TOKEN).");
+    saveGithubBtn.disabled = true;
+    saveGithubBtn.textContent = "Готовлю...";
+
+    const token = await ensureValidToken();
+    if(!token){
+      saveGithubBtn.textContent = "Сохранить в GitHub";
       return;
     }
-    saveGithubBtn.disabled = true;
+
     saveGithubBtn.textContent = "Сохраняю...";
 
-    const cur = await githubGetFile(); // берём sha
-    await githubPutFile({ banks }, cur.sha);
+    const cur = await githubGetFile(token); // sha
+    await githubPutFile({ banks }, cur.sha, token);
 
     saveGithubBtn.textContent = "Сохранено ✓";
     setTimeout(()=> saveGithubBtn.textContent = "Сохранить в GitHub", 1200);
