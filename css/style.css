@@ -36,10 +36,12 @@ body{
   border-bottom: 1px solid rgba(43,58,85,.55);
 }
 
-.headerRow.{
+/* ✅ FIX: было headerRow.{ */
+.headerRow{
   display:flex;
   align-items:center;
-  justify-content:space-between;
+  justify-content:center;
+  position:relative;
   gap:12px;
   padding:14px 0 10px;
   min-height:64px;
@@ -62,6 +64,7 @@ body{
 }
 .muted{ color: var(--muted); }
 .tiny{ font-size:12px; }
+
 .empty{
   margin:18px 0 50px;
   padding:18px;
@@ -110,6 +113,7 @@ body{
   border-color: rgba(63,91,135,.95);
 }
 .btn.primary:hover{ background: rgba(77,110,160,.95); }
+
 .btn.danger{
   background: rgba(163,59,59,.55);
   border-color: rgba(192,75,75,.7);
@@ -119,23 +123,29 @@ body{
   border-color: rgba(192,75,75,.9);
 }
 
-/*.iconBtn{
-  width:40px;
-  height:40px;
+.iconBtn{
+  width:42px;
+  height:42px;
   display:grid;
   place-items:center;
-  border-radius: 12px;
+  border-radius:12px;
   border:1px solid rgba(43,58,85,.85);
   background: rgba(30,42,66,.75);
-  color:#fff;
   cursor:pointer;
-}*/
-.iconBtn:hover{ background: rgba(36,54,84,.85); border-color: rgba(63,91,135,.9); }
-.lockDot{
-  width:10px; height:10px;
-  border-radius:50%;
-  background: rgba(255,255,255,.75);
-  box-shadow: 0 0 0 4px rgba(63,91,135,.25);
+  transition:.15s;
+}
+.iconBtn:hover{
+  background: rgba(36,54,84,.85);
+  border-color: rgba(63,91,135,.9);
+}
+.iconBtn svg{
+  width:18px;
+  height:18px;
+  stroke:white;
+  stroke-width:2;
+  fill:none;
+  opacity:.9;
+  align-items:center;
 }
 
 .searchRow{
@@ -233,12 +243,6 @@ body{
   color: var(--muted2);
   font-size:12px;
   text-align:right;
-}
-
-.cardActions{
-  display:flex;
-  gap:8px;
-  margin-top:10px;
 }
 
 /* ===== Modal ===== */
@@ -344,18 +348,7 @@ body{
   }
 }
 
-.cardActions{
-  display:grid;
-  grid-template-columns: repeat(2, minmax(0,1fr));
-  gap:8px;
-  margin-top:10px;
-}
-
-.cardActions .btn{
-  width:100%;
-  white-space: nowrap;
-}
-
+/* скрыть текстовые кнопки в шапке */
 #depositBtn,
 #withdrawBtn,
 #loadGithubBtn{
@@ -377,52 +370,13 @@ body{
 /* подсветка перетаскиваемой */
 .dragGhost{ opacity: .45; }
 
-.headerRow{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  position:relative;
-  padding:14px 0 10px;
-}
-
+/* позиционирование иконок в шапке */
 .orderToggle{
   position:absolute;
   right:0;
   top:65%;
   transform:translateY(-50%);
 }
-
-.searchRow{
-  display:none !important;
-}
-
-.iconBtn{
-  width:42px;
-  height:42px;
-  display:grid;
-  place-items:center;
-  border-radius:12px;
-  border:1px solid rgba(43,58,85,.85);
-  background: rgba(30,42,66,.75);
-  cursor:pointer;
-  transition:.15s;
-}
-
-.iconBtn:hover{
-  background: rgba(36,54,84,.85);
-  border-color: rgba(63,91,135,.9);
-}
-
-.iconBtn svg{
-  width:18px;
-  height:18px;
-  stroke:white;
-  stroke-width:2;
-  fill:none;
-  opacity:.9;
-  align-items:center; 
-}
-
 .saveGithubBtn{
   position:absolute;
   right:45px;
@@ -435,7 +389,22 @@ body{
   top:65%;
   transform:translateY(-50%);
 }
+.editBtn{
+  position:absolute;
+  right:135px;
+  top:65%;
+  transform:translateY(-50%);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
 
+/* скрыть поиск */
+.searchRow{
+  display:none !important;
+}
+
+/* футер */
 .footerDev{
   padding:14px 0;
   text-align:center;
@@ -453,39 +422,73 @@ body{
   letter-spacing:.04em;
 }
 
+/* ===== Card icon actions (✅ НОВОЕ) ===== */
 /* по умолчанию кнопки на карточках скрыты */
 .cardActions{ display:none; }
 
 /* когда включён режим действий — показываем */
-body.actionsOn .cardActions{ display:flex; }
+body.actionsOn .cardActions{ display:grid; }
 
-/* чтобы при скрытых кнопках карточка выглядела аккуратно */
 .cardActions{
-  gap:8px;
+  grid-template-columns: repeat(4, 42px);
+  gap:10px;
   margin-top:10px;
-  flex-wrap:wrap;
+  justify-content:flex-start;
 }
 
-.editBtn {
-  position:absolute;
-  right:135px;
-  top:65%;
-  transform:translateY(-50%);
-  color: #fff;
-  display:flex;
-  align-items:center;      /* центр по вертикали */
-  justify-content:center;  /* центр по горизонтали */
+.iconAct{
+  width:42px;
+  height:42px;
+  display:grid;
+  place-items:center;
+  border-radius:12px;
+  border:1px solid rgba(43,58,85,.85);
+  background: rgba(30,42,66,.75);
+  cursor:pointer;
+  transition: transform .08s ease, background .15s ease, border-color .15s ease, opacity .15s ease;
+  padding:0;
+}
+.iconAct:hover{
+  background: rgba(36,54,84,.85);
+  border-color: rgba(63,91,135,.9);
+}
+.iconAct:active{ transform: translateY(1px); }
+
+.iconAct svg{
+  width:18px;
+  height:18px;
+  stroke:#fff;
+  stroke-width:2;
+  fill:none;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+  opacity:.92;
 }
 
-.actionsIconEdit {
-display:flex;
-  align-items:center;      /* центр по вертикали */
-  justify-content:center;  /* центр по горизонтали */
+/* варианты цветов */
+.iconAct.primary{
+  background: rgba(63,91,135,.9);
+  border-color: rgba(63,91,135,.95);
 }
-.actionsIconDone {
-display:flex;
-  align-items:center;      /* центр по вертикали */
-  justify-content:center;  /* центр по горизонтали */
+.iconAct.primary:hover{ background: rgba(77,110,160,.95); }
+
+.iconAct.danger{
+  background: rgba(163,59,59,.55);
+  border-color: rgba(192,75,75,.7);
+}
+.iconAct.danger:hover{
+  background: rgba(192,75,75,.65);
+  border-color: rgba(192,75,75,.9);
+}
+
+/* удалить как “обводка” */
+.iconAct.dangerOutline{
+  background: rgba(30,42,66,.75);
+  border-color: rgba(192,75,75,.7);
+}
+.iconAct.dangerOutline:hover{
+  background: rgba(45,25,25,.55);
+  border-color: rgba(192,75,75,.95);
 }
 
 /* ===== Token modal (TSC) ===== */
