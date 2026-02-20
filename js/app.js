@@ -22,7 +22,7 @@ const saveGithubBtn = document.getElementById("saveGithubBtn");
 
 const orderBtn = document.getElementById("orderBtn");
 
-// ✅ NEW: кнопка “показать/скрыть кнопки на карточках”
+// actions buttons toggle
 const actionsBtn = document.getElementById("actionsBtn");
 const actionsIconEdit = document.getElementById("actionsIconEdit");
 const actionsIconDone = document.getElementById("actionsIconDone");
@@ -60,10 +60,10 @@ let editingId = null;
 let reorderMode = false;
 let sortable = null;
 
-// ✅ NEW: actions mode (показывать кнопки на карточках)
+// actions mode (показывать кнопки на карточках)
 let actionsMode = false;
 
-// ====== helpers ======
+// ===================== helpers =====================
 function escapeHtml(str){
   return (str ?? "").toString()
     .replaceAll("&","&amp;")
@@ -153,7 +153,6 @@ function normalizeBanks(list){
   return Array.from(map.values());
 }
 
-// если у старых копилок нет order/createdAt — назначаем один раз
 function ensureOrderFields(){
   const now = Date.now();
   let changed = false;
@@ -166,7 +165,7 @@ function ensureOrderFields(){
   if(changed) saveCache();
 }
 
-// ====== GitHub API ======
+// ===================== GitHub API =====================
 function toBase64Utf8(str){
   return btoa(unescape(encodeURIComponent(str)));
 }
@@ -179,20 +178,17 @@ function ghHeaders(token){
   };
 }
 
-// 1) Чтение через GitHub API (нужен токен)
 async function githubGetFile(token){
   const api = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_PATH}`;
 
-  const res = await fetch(api, {
-    headers: ghHeaders(token)
-  });
+  const res = await fetch(api, { headers: ghHeaders(token) });
 
   if(!res.ok){
     const t = await res.text();
-    throw new Error("GitHub read failed: " + t);
+    throw new Error(t || `HTTP ${res.status}`);
   }
 
-  const json = await res.json(); // has content + sha
+  const json = await res.json();
   const content = decodeURIComponent(escape(atob((json.content || "").replace(/\n/g,""))));
   return { data: JSON.parse(content), sha: json.sha };
 }
@@ -218,13 +214,12 @@ async function githubPutFile(newData, sha, token){
 
   if(!res.ok){
     const t = await res.text();
-    throw new Error("GitHub save failed: " + t);
+    throw new Error(t || `HTTP ${res.status}`);
   }
 
   return await res.json();
 }
 
-// 2) Чтение через GitHub Pages (без токена) — это то, что работает в инкогнито
 async function pagesGetFile(){
   const url = `${GITHUB_PATH}?v=${Date.now()}`;
   const res = await fetch(url, { cache: "no-store" });
@@ -232,9 +227,8 @@ async function pagesGetFile(){
   return await res.json();
 }
 
-// ====== Автозагрузка (Pages -> Cache) ======
+// ===================== Автозагрузка =====================
 async function autoLoadState(){
-  // Сначала пробуем GitHub Pages
   try{
     const pages = await pagesGetFile();
     if(pages && typeof pages === "object" && Array.isArray(pages.banks)){
@@ -245,79 +239,48 @@ async function autoLoadState(){
     }
   }catch{}
 
-  // Иначе берём локальный кеш
   const ok = loadCache();
   ensureOrderFields();
   return { from: ok ? "cache" : "empty" };
 }
 
-// ====== Token modal (TSC style) ======
-function getSavedToken(){
-  return sessionStorage.getItem(TOKEN_SESSION_KEY)
-    || localStorage.getItem(TOKEN_LOCAL_KEY)
-    || "";
-}
-
-function clearSavedToken(){
-  sessionStorage.removeItem(TOKEN_SESSION_KEY);
-  localStorage.removeItem(TOKEN_LOCAL_KEY);
-}
-
-function injectTokenModalOnce(){
-  if(document.getElementById("tokenWrap")) return;
+// ===================== TSC Notice modal (styled вместо alert) =====================
+function ensureNoticeUI(){
+  if(document.getElementById("noticeWrap")) return;
 
   const style = document.createElement("style");
   style.textContent = `
-    .tokenWrap{
+    .noticeWrap{
       position:fixed; inset:0;
       display:none; align-items:center; justify-content:center;
-      padding:16px; z-index:99999;
+      padding:16px; z-index:100000;
       background: rgba(0,0,0,.72);
     }
-    .tokenWrap.open{ display:flex; }
-    .tokenModal{
-      width:min(560px, 100%);
+    .noticeWrap.open{ display:flex; }
+    .noticeModal{
+      width:min(520px, 100%);
       background: rgba(18,26,42,.92);
       border: 1px solid rgba(43,58,85,.9);
       border-radius: 16px;
       box-shadow: 0 18px 60px rgba(0,0,0,.55);
       overflow:hidden;
     }
-    .tokenHead{ padding:14px 14px 0; }
-    .tokenTitle{ font-size:18px; font-weight:900; }
-    .tokenSub{ margin-top:6px; color: rgba(255,255,255,.55); font-size:13px; line-height:1.35; }
-    .tokenBody{ padding:14px; }
-    .tokenLabel{ display:block; font-size:12px; color: rgba(255,255,255,.55); margin:0 0 6px; }
-    .tokenInput{
-      width:100%;
-      padding: 11px 12px;
-      border-radius: 12px;
-      border:1px solid rgba(43,58,85,.85);
-      background: rgba(0,0,0,.25);
-      color:#fff;
-      outline:none;
-    }
-    .tokenRow{
+    .noticeHead{
       display:flex; align-items:center; justify-content:space-between;
-      gap:10px; margin-top:10px; flex-wrap:wrap;
+      padding: 12px 12px;
+      border-bottom: 1px solid rgba(43,58,85,.55);
+      gap:12px;
     }
-    .tokenCheck{
-      display:flex; align-items:center; gap:8px;
-      color: rgba(255,255,255,.7);
-      font-size:13px;
-      user-select:none;
+    .noticeTitle{ font-size:16px; font-weight:900; }
+    .noticeBody{ padding: 12px; color: rgba(255,255,255,.8); line-height:1.45; white-space:pre-wrap; }
+    .noticeFoot{
+      padding: 12px;
+      display:flex;
+      justify-content:flex-end;
+      gap:10px;
+      border-top: 1px solid rgba(43,58,85,.55);
     }
-    .tokenErr{
-      margin-top:10px;
-      color: rgba(192,75,75,1);
-      font-size:13px;
-      display:none;
-      white-space: pre-wrap;
-    }
-    .tokenActions{
-      display:flex; gap:10px; justify-content:flex-end; margin-top:12px;
-    }
-    .tokenBtn{
+    .noticeOk{
       border:1px solid rgba(43,58,85,.85);
       background: rgba(30,42,66,.75);
       color:#fff;
@@ -325,236 +288,209 @@ function injectTokenModalOnce(){
       border-radius: 12px;
       cursor:pointer;
     }
-    .tokenBtn:hover{ background: rgba(36,54,84,.85); border-color: rgba(63,91,135,.9); }
-    .tokenBtn.primary{
-      background: rgba(63,91,135,.9);
-      border-color: rgba(63,91,135,.95);
-    }
-    .tokenBtn.primary:hover{ background: rgba(77,110,160,.95); }
-    .tokenTiny{ margin-top:10px; font-size:12px; color: rgba(255,255,255,.55); line-height:1.35; }
-    .tokenLink{
-      color: rgba(255,255,255,.75);
-      text-decoration: underline;
-      cursor:pointer;
-    }
+    .noticeOk:hover{ background: rgba(36,54,84,.85); border-color: rgba(63,91,135,.9); }
   `;
   document.head.appendChild(style);
 
   const wrap = document.createElement("div");
-  wrap.className = "tokenWrap";
-  wrap.id = "tokenWrap";
+  wrap.className = "noticeWrap";
+  wrap.id = "noticeWrap";
   wrap.setAttribute("aria-hidden","true");
   wrap.innerHTML = `
-    <div class="tokenModal" role="dialog" aria-modal="true">
-      <div class="tokenHead">
-        <div class="tokenTitle">GitHub токен</div>
-        <div class="tokenSub">
-          Введи Personal Access Token (classic или fine-grained) с правами записи в репозиторий.
-          Токен нужен только для <b>сохранения</b>.
-        </div>
+    <div class="noticeModal" role="dialog" aria-modal="true">
+      <div class="noticeHead">
+        <div class="noticeTitle" id="noticeTitle">Сообщение</div>
+        <button class="iconBtn" id="noticeClose" type="button" title="Закрыть">✕</button>
       </div>
-
-      <div class="tokenBody">
-        <label class="tokenLabel" for="tokenInput">Токен</label>
-        <input id="tokenInput" class="tokenInput" type="password" placeholder="github_pat_..." autocomplete="off"/>
-
-        <div class="tokenRow">
-          <label class="tokenCheck">
-            <input id="tokenRemember" type="checkbox" />
-            Запомнить на этом устройстве
-          </label>
-          <span class="tokenLink" id="tokenClear">Сбросить сохранённый</span>
-        </div>
-
-        <div class="tokenErr" id="tokenError"></div>
-
-        <div class="tokenActions">
-          <button class="tokenBtn" id="tokenCancel" type="button">Отмена</button>
-          <button class="tokenBtn primary" id="tokenOk" type="button">Продолжить</button>
-        </div>
-
-        <div class="tokenTiny">
-          Если токен неверный/истёк — появится ошибка. Можно вставлять заново сколько угодно.
-        </div>
+      <div class="noticeBody" id="noticeBody"></div>
+      <div class="noticeFoot">
+        <button class="noticeOk" id="noticeOk" type="button">Ок</button>
       </div>
     </div>
   `;
   document.body.appendChild(wrap);
 
-  // clear token
-  wrap.querySelector("#tokenClear").addEventListener("click", ()=>{
-    clearSavedToken();
-    wrap.querySelector("#tokenInput").value = "";
-    const err = wrap.querySelector("#tokenError");
-    err.style.display = "none";
-    err.textContent = "";
+  const close = () => {
+    wrap.classList.remove("open");
+    wrap.setAttribute("aria-hidden","true");
+  };
+
+  wrap.querySelector("#noticeClose").addEventListener("click", close);
+  wrap.querySelector("#noticeOk").addEventListener("click", close);
+  wrap.addEventListener("click", (e)=>{ if(e.target === wrap) close(); });
+  document.addEventListener("keydown", (e)=>{
+    if(e.key === "Escape" && wrap.classList.contains("open")) close();
   });
 }
 
-function askToken({ title = "GitHub токен", prefill = "" } = {}){
-  injectTokenModalOnce();
+function showNotice(title, message){
+  ensureNoticeUI();
+  const wrap = document.getElementById("noticeWrap");
+  const t = document.getElementById("noticeTitle");
+  const b = document.getElementById("noticeBody");
+  t.textContent = title || "Сообщение";
+  b.textContent = message || "";
+  wrap.classList.add("open");
+  wrap.setAttribute("aria-hidden","false");
+}
 
-  const wrap = document.getElementById("tokenWrap");
-  const input = document.getElementById("tokenInput");
-  const remember = document.getElementById("tokenRemember");
-  const okBtn = document.getElementById("tokenOk");
-  const cancel = document.getElementById("tokenCancel");
-  const err = document.getElementById("tokenError");
-  const titleEl = wrap.querySelector(".tokenTitle");
+// ===================== Token modal (используем ТВОЙ HTML) =====================
+const tokenWrap = document.getElementById("tokenWrap");
+const tokenInput = document.getElementById("tokenInput");
+const tokenRemember = document.getElementById("tokenRemember");
+const tokenError = document.getElementById("tokenError");
+const tokenClose = document.getElementById("tokenClose");
+const tokenCancel = document.getElementById("tokenCancel");
+const tokenTest = document.getElementById("tokenTest");
+const tokenOk = document.getElementById("tokenOk");
 
-  titleEl.textContent = title;
+function getSavedToken(){
+  return sessionStorage.getItem(TOKEN_SESSION_KEY)
+    || localStorage.getItem(TOKEN_LOCAL_KEY)
+    || "";
+}
+function clearSavedToken(){
+  sessionStorage.removeItem(TOKEN_SESSION_KEY);
+  localStorage.removeItem(TOKEN_LOCAL_KEY);
+}
+function setSavedToken(token, remember){
+  const t = (token || "").trim();
+  if(!t) return;
+  if(remember){
+    localStorage.setItem(TOKEN_LOCAL_KEY, t);
+    sessionStorage.removeItem(TOKEN_SESSION_KEY);
+  }else{
+    sessionStorage.setItem(TOKEN_SESSION_KEY, t);
+    localStorage.removeItem(TOKEN_LOCAL_KEY);
+  }
+}
 
-  function open(){
-    wrap.classList.add("open");
-    wrap.setAttribute("aria-hidden","false");
-    err.style.display = "none";
-    err.textContent = "";
-    input.value = prefill || getSavedToken() || "";
-    remember.checked = !!localStorage.getItem(TOKEN_LOCAL_KEY);
-    setTimeout(()=>input.focus(), 60);
-  }
-  function close(){
-    wrap.classList.remove("open");
-    wrap.setAttribute("aria-hidden","true");
-  }
-  function showError(msg){
-    err.textContent = msg || "Ошибка";
-    err.style.display = "block";
-  }
+function tokenShowError(msg, ok=false){
+  if(!tokenError) return;
+  tokenError.style.display = "block";
+  tokenError.style.color = ok ? "rgba(120, 220, 160, 1)" : "rgba(192,75,75,1)";
+  tokenError.textContent = msg || "";
+}
+
+function tokenHideError(){
+  if(!tokenError) return;
+  tokenError.style.display = "none";
+  tokenError.textContent = "";
+}
+
+function openTokenModal(prefill=""){
+  if(!tokenWrap) return Promise.resolve(null);
+
+  tokenWrap.classList.add("open");
+  tokenWrap.setAttribute("aria-hidden","false");
+  tokenHideError();
+
+  tokenInput.value = prefill || getSavedToken() || "";
+  tokenRemember.checked = !!localStorage.getItem(TOKEN_LOCAL_KEY);
+
+  // по умолчанию "Использовать" включена, но если хочешь — можно делать disabled до проверки
+  tokenOk.disabled = false;
+
+  setTimeout(()=>tokenInput.focus(), 60);
 
   return new Promise((resolve)=>{
-    open();
-
-    const cleanup = ()=>{
-      okBtn.removeEventListener("click", onOk);
-      cancel.removeEventListener("click", onCancel);
-      wrap.removeEventListener("click", onBackdrop);
-      input.removeEventListener("keydown", onKey);
+    const close = (result=null)=>{
+      tokenWrap.classList.remove("open");
+      tokenWrap.setAttribute("aria-hidden","true");
+      cleanup();
+      resolve(result);
     };
 
-    const onOk = ()=>{
-      const token = (input.value || "").trim();
+    const onBackdrop = (e)=>{ if(e.target === tokenWrap) close(null); };
+    const onEsc = (e)=>{ if(e.key === "Escape") close(null); };
+    const onClose = ()=>close(null);
+
+    const onTest = async ()=>{
+      const token = (tokenInput.value || "").trim();
       if(!token){
-        showError("Вставь токен.");
+        tokenShowError("Вставь токен, потом нажми «Проверить».");
         return;
       }
-      // save token
-      if(remember.checked){
-        localStorage.setItem(TOKEN_LOCAL_KEY, token);
-        sessionStorage.removeItem(TOKEN_SESSION_KEY);
-      }else{
-        sessionStorage.setItem(TOKEN_SESSION_KEY, token);
-        localStorage.removeItem(TOKEN_LOCAL_KEY);
+      tokenTest.disabled = true;
+      tokenTest.textContent = "Проверяю...";
+      try{
+        await githubGetFile(token);
+        tokenShowError("Токен рабочий ✅", true);
+      }catch(e){
+        tokenShowError("Токен не подошёл или нет прав.\n\n" + (e?.message || ""), false);
+      }finally{
+        tokenTest.disabled = false;
+        tokenTest.textContent = "Проверить";
       }
-      close();
-      cleanup();
-      resolve({ token, remember: remember.checked, showError }); // showError на всякий
     };
 
-    const onCancel = ()=>{
-      close();
-      cleanup();
-      resolve(null);
-    };
-
-    const onBackdrop = (e)=>{
-      if(e.target === wrap) onCancel();
+    const onOk = ()=> {
+      const token = (tokenInput.value || "").trim();
+      if(!token){
+        tokenShowError("Вставь токен.");
+        return;
+      }
+      // сохраняем выбор пользователя
+      setSavedToken(token, !!tokenRemember.checked);
+      close({ token });
     };
 
     const onKey = (e)=>{
       if(e.key === "Enter") onOk();
-      if(e.key === "Escape") onCancel();
     };
 
-    okBtn.addEventListener("click", onOk);
-    cancel.addEventListener("click", onCancel);
-    wrap.addEventListener("click", onBackdrop);
-    input.addEventListener("keydown", onKey);
+    const cleanup = ()=>{
+      tokenWrap.removeEventListener("click", onBackdrop);
+      document.removeEventListener("keydown", onEsc);
+      tokenClose?.removeEventListener("click", onClose);
+      tokenCancel?.removeEventListener("click", onClose);
+      tokenTest?.removeEventListener("click", onTest);
+      tokenOk?.removeEventListener("click", onOk);
+      tokenInput?.removeEventListener("keydown", onKey);
+    };
+
+    tokenWrap.addEventListener("click", onBackdrop);
+    document.addEventListener("keydown", onEsc);
+    tokenClose?.addEventListener("click", onClose);
+    tokenCancel?.addEventListener("click", onClose);
+    tokenTest?.addEventListener("click", onTest);
+    tokenOk?.addEventListener("click", onOk);
+    tokenInput?.addEventListener("keydown", onKey);
   });
 }
 
-// Показываем ошибку в модалке и просим токен снова
 async function ensureValidToken(){
-  // 1) берём сохранённый
   const saved = getSavedToken();
   if(saved){
-    // пробуем проверить токен чтением файла (быстро)
     try{
       await githubGetFile(saved);
       return saved;
     }catch{
-      // если невалиден — сбросим, чтобы не зацикливаться
       clearSavedToken();
     }
   }
 
-  // 2) спрашиваем токен у пользователя, проверяем
   while(true){
-    const res = await askToken({ title: "Токен для сохранения" });
-    if(!res) return null;
+    const res = await openTokenModal("");
+    if(!res?.token) return null;
 
     try{
       await githubGetFile(res.token);
       return res.token;
     }catch(e){
-      // повторно откроем окно с ошибкой
-      injectTokenModalOnce();
-      const wrap = document.getElementById("tokenWrap");
-      const err = document.getElementById("tokenError");
-      wrap.classList.add("open");
-      wrap.setAttribute("aria-hidden","false");
-      err.style.display = "block";
-      err.textContent = "Токен не подошёл (или истёк/нет прав).\n\n" + (e?.message || "");
-      // подставим токен обратно в поле, чтобы можно было быстро поправить
-      document.getElementById("tokenInput").value = res.token || "";
-      // ждём, пока пользователь нажмёт Продолжить/Отмена
-      const again = await new Promise((resolve)=>{
-        const okBtn = document.getElementById("tokenOk");
-        const cancelBtn = document.getElementById("tokenCancel");
-        const input = document.getElementById("tokenInput");
-        const remember = document.getElementById("tokenRemember");
-
-        const cleanup = ()=>{
-          okBtn.removeEventListener("click", onOk);
-          cancelBtn.removeEventListener("click", onCancel);
-        };
-
-        const onOk = ()=>{
-          const token = (input.value || "").trim();
-          if(!token) return;
-          if(remember.checked){
-            localStorage.setItem(TOKEN_LOCAL_KEY, token);
-            sessionStorage.removeItem(TOKEN_SESSION_KEY);
-          }else{
-            sessionStorage.setItem(TOKEN_SESSION_KEY, token);
-            localStorage.removeItem(TOKEN_LOCAL_KEY);
-          }
-          wrap.classList.remove("open");
-          wrap.setAttribute("aria-hidden","true");
-          cleanup();
-          resolve(token);
-        };
-
-        const onCancel = ()=>{
-          wrap.classList.remove("open");
-          wrap.setAttribute("aria-hidden","true");
-          cleanup();
-          resolve(null);
-        };
-
-        okBtn.addEventListener("click", onOk);
-        cancelBtn.addEventListener("click", onCancel);
-      });
-
-      if(!again) return null;
-      // проверим на следующем круге
+      // покажем ошибку и оставим модалку снова
+      tokenShowError("Токен не подошёл или нет прав.\n\n" + (e?.message || ""), false);
       clearSavedToken();
-      sessionStorage.setItem(TOKEN_SESSION_KEY, again);
+      // откроем ещё раз с тем же токеном, чтобы можно было поправить
+      // (модалка уже закрылась, открываем снова)
+      await new Promise(r => setTimeout(r, 50));
+      await openTokenModal(res.token);
+      // цикл повторится
     }
   }
 }
 
-// ====== UI ======
+// ===================== UI modal (create/ops) =====================
 function openModal(title){
   modalTitle.textContent = title;
   modalWrap.classList.add("open");
@@ -564,12 +500,11 @@ function closeModalFn(){
   modalWrap.classList.remove("open");
   modalWrap.setAttribute("aria-hidden","true");
 }
+closeModal?.addEventListener("click", closeModalFn);
+cancelBtn?.addEventListener("click", closeModalFn);
+modalWrap?.addEventListener("click", (e)=>{ if(e.target === modalWrap) closeModalFn(); });
 
-closeModal.addEventListener("click", closeModalFn);
-cancelBtn.addEventListener("click", closeModalFn);
-modalWrap.addEventListener("click", (e)=>{ if(e.target === modalWrap) closeModalFn(); });
-
-// ✅ NEW: показать/скрыть кнопки действий на карточках
+// ===================== actions toggle =====================
 function setActionsMode(on){
   actionsMode = !!on;
   document.body.classList.toggle("actionsOn", actionsMode);
@@ -579,11 +514,9 @@ function setActionsMode(on){
     actionsIconDone.style.display = actionsMode ? "block" : "none";
   }
 }
-actionsBtn?.addEventListener("click", ()=>{
-  setActionsMode(!actionsMode);
-});
+actionsBtn?.addEventListener("click", ()=> setActionsMode(!actionsMode) );
 
-// ====== reorder mode ======
+// ===================== reorder mode =====================
 function enableReorder(){
   if(sortable || !window.Sortable) return;
 
@@ -620,10 +553,9 @@ function disableReorder(){
   document.body.classList.remove("reorderOn");
 }
 
-// ====== render ======
+// ===================== render =====================
 function applyFilter(){
   banks.sort((a,b) => (b.order ?? 0) - (a.order ?? 0));
-
   const q = norm(query);
   filtered = banks.filter(b => !q || norm(b.name).includes(q));
   renderList();
@@ -686,7 +618,7 @@ function render(){
   applyFilter();
 }
 
-// ====== actions ======
+// ===================== actions =====================
 function openCreate(){
   modalMode = "create";
   editingId = null;
@@ -716,7 +648,7 @@ function openEdit(id){
 }
 
 function openOp(type, id=null){
-  modalMode = type; // deposit | withdraw
+  modalMode = type;
   createForm.style.display = "none";
   opForm.style.display = "block";
 
@@ -748,19 +680,19 @@ function saveFromModal(){
     const startRaw = (f_start.value || "").trim();
 
     if(!name){
-      alert("Введите название копилки.");
+      showNotice("Ошибка", "Введите название копилки.");
       return;
     }
 
     const goal = goalRaw ? parseNum(goalRaw) : null;
     if(goalRaw && (goal === null || goal <= 0)){
-      alert("Цель должна быть числом больше 0, либо оставьте пустым.");
+      showNotice("Ошибка", "Цель должна быть числом больше 0, либо оставьте пустым.");
       return;
     }
 
     const start = startRaw ? parseNum(startRaw) : 0;
     if(start === null || start < 0){
-      alert("Стартовая сумма должна быть числом 0 или больше.");
+      showNotice("Ошибка", "Стартовая сумма должна быть числом 0 или больше.");
       return;
     }
 
@@ -784,7 +716,7 @@ function saveFromModal(){
 
   if(modalMode === "deposit" || modalMode === "withdraw"){
     if(!banks.length){
-      alert("Сначала создай копилку.");
+      showNotice("Ошибка", "Сначала создай копилку.");
       return;
     }
 
@@ -792,11 +724,11 @@ function saveFromModal(){
     const amt = parseNum(f_amount.value);
 
     if(!id){
-      alert("Выберите копилку.");
+      showNotice("Ошибка", "Выберите копилку.");
       return;
     }
     if(amt === null || amt <= 0){
-      alert("Введите сумму больше 0.");
+      showNotice("Ошибка", "Введите сумму больше 0.");
       return;
     }
 
@@ -813,7 +745,7 @@ function saveFromModal(){
   }
 }
 
-saveBtn.addEventListener("click", saveFromModal);
+saveBtn?.addEventListener("click", saveFromModal);
 
 createBtn?.addEventListener("click", openCreate);
 depositBtn?.addEventListener("click", ()=>{
@@ -825,16 +757,16 @@ withdrawBtn?.addEventListener("click", ()=>{
   openOp("withdraw");
 });
 
-// ====== search ======
-clearSearch.style.display = "none";
-function syncClear(){ clearSearch.style.display = searchInput.value ? "block" : "none"; }
+// ===================== search =====================
+if(clearSearch) clearSearch.style.display = "none";
+function syncClear(){ if(clearSearch) clearSearch.style.display = searchInput?.value ? "block" : "none"; }
 
-searchInput.addEventListener("input", ()=>{
+searchInput?.addEventListener("input", ()=>{
   query = searchInput.value;
   syncClear();
   render();
 });
-clearSearch.addEventListener("click", ()=>{
+clearSearch?.addEventListener("click", ()=>{
   searchInput.value = "";
   query = "";
   syncClear();
@@ -843,7 +775,7 @@ clearSearch.addEventListener("click", ()=>{
 });
 syncClear();
 
-// ====== GitHub buttons ======
+// ===================== GitHub buttons =====================
 loadGithubBtn?.addEventListener("click", async ()=>{
   try{
     loadGithubBtn.disabled = true;
@@ -855,18 +787,17 @@ loadGithubBtn?.addEventListener("click", async ()=>{
       ensureOrderFields();
       saveCache();
       render();
-      alert("Загружено из GitHub Pages.");
+      showNotice("Готово", "Загружено из GitHub Pages.");
       return;
     }
 
-    // если Pages пусто — грузим из кеша (как резерв)
     const ok = loadCache();
     ensureOrderFields();
     render();
-    alert(ok ? "На Pages пока пусто. Показал локальный кеш." : "На Pages пока пусто и кеш пустой.");
+    showNotice("Инфо", ok ? "На Pages пока пусто. Показал локальный кеш." : "На Pages пока пусто и кеш пустой.");
   }catch(e){
     console.error(e);
-    alert("Ошибка загрузки: " + e.message);
+    showNotice("Ошибка", "Ошибка загрузки:\n\n" + (e?.message || e));
   }finally{
     loadGithubBtn.disabled = false;
     loadGithubBtn.textContent = "Загрузить из GitHub";
@@ -881,6 +812,7 @@ saveGithubBtn?.addEventListener("click", async ()=>{
     const token = await ensureValidToken();
     if(!token){
       saveGithubBtn.textContent = "Сохранить в GitHub";
+      saveGithubBtn.disabled = false;
       return;
     }
 
@@ -891,40 +823,39 @@ saveGithubBtn?.addEventListener("click", async ()=>{
 
     saveGithubBtn.textContent = "Сохранено ✓";
     setTimeout(()=> saveGithubBtn.textContent = "Сохранить в GitHub", 1200);
-    alert("Сохранено в GitHub. GitHub Pages может обновляться 10–60 секунд.");
+
+    showNotice("Сохранено ✅", "Данные записаны в GitHub.\nGitHub Pages может обновляться 10–60 секунд.");
   }catch(e){
     console.error(e);
-    alert("Ошибка сохранения в GitHub: " + e.message);
+    showNotice("Ошибка", "Ошибка сохранения в GitHub:\n\n" + (e?.message || e));
     saveGithubBtn.textContent = "Сохранить в GitHub";
   }finally{
     saveGithubBtn.disabled = false;
   }
 });
 
-// ====== Order button ======
-const orderIconEdit = document.getElementById("orderIconEdit");
+// ===================== Order button =====================
 const orderIconDone = document.getElementById("orderIconDone");
+// (orderIconEdit у тебя в кнопке нет — нормально, просто не трогаем)
 
 orderBtn?.addEventListener("click", ()=>{
   reorderMode = !reorderMode;
 
   if(reorderMode){
     enableReorder();
-    if(orderIconEdit) orderIconEdit.style.display = "none";
     if(orderIconDone) orderIconDone.style.display = "block";
   }else{
     disableReorder();
     render();
-    if(orderIconEdit) orderIconEdit.style.display = "block";
     if(orderIconDone) orderIconDone.style.display = "none";
   }
 });
 
-// ====== init ======
+// ===================== init =====================
 (async function init(){
   await autoLoadState();
 
-  // ✅ NEW: по умолчанию кнопки скрыты
+  // по умолчанию кнопки скрыты
   setActionsMode(false);
 
   render();
