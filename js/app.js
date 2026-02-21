@@ -356,19 +356,19 @@ async function ensureValidToken(){
 
     const onTest = async ()=>{
       const token = (input.value || "").trim();
-      if(!token) return showErr("Вставь токен.");
+      if(!token) return showErr("Вставьте ключ.");
       try{
         await githubGetFile(token);
         err.style.display = "block";
-        err.textContent = "✅ Токен рабочий.";
+        err.textContent = "✅ Ключ рабочий.";
       }catch(e){
-        showErr("❌ Токен не подошёл.\n" + (e?.message || ""));
+        showErr("❌ Ключ не подошёл.\n");
       }
     };
 
     const onOk = async ()=>{
       const token = (input.value || "").trim();
-      if(!token) return showErr("Вставь токен.");
+      if(!token) return showErr("Вставь ключ.");
 
       try{
         await githubGetFile(token);
@@ -377,7 +377,7 @@ async function ensureValidToken(){
         cleanup();
         resolve(token);
       }catch(e){
-        showErr("❌ Токен не подошёл (или нет прав).\n" + (e?.message || ""));
+        showErr("❌ Ключ не подошёл.\n");
       }
     };
 
