@@ -160,15 +160,15 @@
   <div class="tokenModal" role="dialog" aria-modal="true">
     <div class="tokenHead">
       <div>
-        <div class="tokenTitle">GitHub Token</div>
-        <div class="tokenSub">Нужен для сохранения в GitHub. Можно запомнить на этом устройстве.</div>
+        <div class="tokenTitle">Ключ сохранения</div>
+        <div class="tokenSub">Нужен для сохранения изменений. Можно запомнить на этом устройстве.</div>
       </div>
       <button class="iconBtn" id="tokenClose" type="button" title="Закрыть">✕</button>
     </div>
 
     <div class="tokenBody">
-      <label class="fieldLabel" for="tokenInput">Token</label>
-      <input id="tokenInput" class="input" type="password" placeholder="ghp_… или github_pat_…" autocomplete="off" />
+      <label class="fieldLabel" for="tokenInput">Ключ:</label>
+      <input id="tokenInput" class="input" type="password" placeholder="введите ключ сохранения..." autocomplete="off" />
 
       <label class="checkRow">
         <input id="tokenRemember" type="checkbox" />
@@ -179,13 +179,13 @@
 
       <div class="tokenActions">
         <button class="btn" id="tokenCancel" type="button">Отмена</button>
-        <button class="btn" id="tokenTest" type="button">Проверить</button>
-        <button class="btn primary" id="tokenOk" type="button">Использовать</button>
+        <button class="btn" id="tokenTest" type="button">Проверить ключ</button>
+        <button class="btn primary" id="tokenOk" type="button">Сохранить</button>
       </div>
 
-      <div class="tiny muted" style="margin-top:10px;">
+      <!--<div class="tiny muted" style="margin-top:10px;">
         * Токен хранится только у тебя в браузере (если включишь “Запомнить”).
-      </div>
+      </div>-->
     </div>
   </div>
 </div>
