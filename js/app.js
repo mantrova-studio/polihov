@@ -398,7 +398,7 @@ function ensureToastOnce(){
   document.body.appendChild(wrap);
 }
 
-function toast({ title="Готово", message="", icon="check", timeout=2600 } = {}){
+function toast({ title="Готово", message="", icon="check", timeout=4600 } = {}){
   ensureToastOnce();
   const wrap = document.getElementById("toastWrap");
   if(!wrap) return;
@@ -550,14 +550,14 @@ function bindTokenModalOnce(){
         tokenError.textContent = "";
       }
       toast({
-        title: "Токен OK",
-        message: "Токен подходит. Можно сохранять.",
+        title: "Ключ действителен",
+        message: "Ключ подходит. Можно сохранять.",
         icon: "check",
         timeout: 2200
       });
     }catch(e){
       clearSavedToken();
-      tokenModalError("Токен не подошёл (или истёк/нет прав).\n\n" + (e?.message || ""));
+      tokenModalError("Ключ не подошёл (или истёк/нет прав).\n\n" + (e?.message || ""));
     }finally{
       tokenTest.disabled = false;
       tokenTest.textContent = "Проверить";
@@ -567,7 +567,7 @@ function bindTokenModalOnce(){
   tokenOk?.addEventListener("click", async ()=>{
     const token = (tokenInput?.value || "").trim();
     if(!token){
-      tokenModalError("Вставь токен.");
+      tokenModalError("Вставь ключ.");
       return;
     }
 
@@ -579,7 +579,7 @@ function bindTokenModalOnce(){
       hideTokenModal();
     }catch(e){
       clearSavedToken();
-      tokenModalError("Токен не подошёл (или истёк/нет прав).\n\n" + (e?.message || ""));
+      tokenModalError("Ключ не подошёл (или истёк/нет прав).\n\n" + (e?.message || ""));
     }finally{
       tokenOk.disabled = false;
       tokenOk.textContent = "Использовать";
