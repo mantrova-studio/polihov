@@ -22,7 +22,7 @@ const saveGithubBtn = document.getElementById("saveGithubBtn");
 
 const orderBtn = document.getElementById("orderBtn");
 
-// кнопка “показать/скрыть кнопки на карточках”
+// ✅ кнопка “показать/скрыть кнопки на карточках”
 const actionsBtn = document.getElementById("actionsBtn");
 const actionsIconEdit = document.getElementById("actionsIconEdit");
 const actionsIconDone = document.getElementById("actionsIconDone");
@@ -30,7 +30,7 @@ const actionsIconDone = document.getElementById("actionsIconDone");
 const searchInput = document.getElementById("searchInput");
 const clearSearch = document.getElementById("clearSearch");
 
-// modal
+// modal (create/edit)
 const modalWrap = document.getElementById("modalWrap");
 const modalTitle = document.getElementById("modalTitle");
 const closeModal = document.getElementById("closeModal");
@@ -47,6 +47,16 @@ const f_start = document.getElementById("f_start");
 
 const f_bank = document.getElementById("f_bank");
 const f_amount = document.getElementById("f_amount");
+
+// token modal (у тебя уже есть в index.html)
+const tokenWrap = document.getElementById("tokenWrap");
+const tokenClose = document.getElementById("tokenClose");
+const tokenCancel = document.getElementById("tokenCancel");
+const tokenTest = document.getElementById("tokenTest");
+const tokenOk = document.getElementById("tokenOk");
+const tokenInput = document.getElementById("tokenInput");
+const tokenRemember = document.getElementById("tokenRemember");
+const tokenError = document.getElementById("tokenError");
 
 // ====== STATE ======
 let banks = [];
@@ -107,6 +117,7 @@ function parseNum(val){
 }
 
 function setSelectBanks(){
+  if(!f_bank) return;
   f_bank.innerHTML = "";
   for(const b of banks){
     const opt = document.createElement("option");
@@ -166,6 +177,112 @@ function ensureOrderFields(){
   if(changed) saveCache();
 }
 
+// ====== Toast (styled message) ======
+function ensureToastOnce(){
+  if(document.getElementById("tscToast")) return;
+
+  const style = document.createElement("style");
+  style.id = "tscToastStyle";
+  style.textContent = `
+    .tscToast{
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%) translateY(20px);
+      z-index: 99999;
+      min-width: min(560px, calc(100% - 24px));
+      background: rgba(18,26,42,.92);
+      border: 1px solid rgba(43,58,85,.9);
+      border-radius: 16px;
+      box-shadow: 0 18px 60px rgba(0,0,0,.55);
+      padding: 12px 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .18s ease, transform .18s ease;
+      backdrop-filter: blur(8px);
+    }
+    .tscToast.show{
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+      pointer-events: auto;
+    }
+    .tscToastIcon{
+      width: 34px;
+      height: 34px;
+      border-radius: 12px;
+      border: 1px solid rgba(43,58,85,.85);
+      background: rgba(30,42,66,.75);
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+    }
+    .tscToastIcon svg{
+      width: 18px;
+      height: 18px;
+      stroke: white;
+      stroke-width: 2;
+      fill: none;
+      opacity: .95;
+    }
+    .tscToastText{
+      flex: 1 1 auto;
+      color: rgba(255,255,255,.92);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+    .tscToastClose{
+      width: 34px;
+      height: 34px;
+      border-radius: 12px;
+      border: 1px solid rgba(43,58,85,.85);
+      background: rgba(30,42,66,.75);
+      color: rgba(255,255,255,.85);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      flex: 0 0 auto;
+    }
+    .tscToastClose:active{ transform: translateY(1px); }
+  `;
+  document.head.appendChild(style);
+
+  const toast = document.createElement("div");
+  toast.id = "tscToast";
+  toast.className = "tscToast";
+  toast.innerHTML = `
+    <div class="tscToastIcon" aria-hidden="true">
+      <svg viewBox="0 0 24 24">
+        <line x1="4"  y1="13" x2="9"  y2="18"></line>
+        <line x1="9"  y1="18" x2="20" y2="7"></line>
+      </svg>
+    </div>
+    <div class="tscToastText" id="tscToastText"></div>
+    <button class="tscToastClose" id="tscToastClose" type="button" title="Закрыть">✕</button>
+  `;
+  document.body.appendChild(toast);
+
+  document.getElementById("tscToastClose")?.addEventListener("click", ()=>{
+    toast.classList.remove("show");
+  });
+}
+
+let toastTimer = null;
+function showToast(msg, ms = 3200){
+  ensureToastOnce();
+  const toast = document.getElementById("tscToast");
+  const text = document.getElementById("tscToastText");
+  if(!toast || !text) return;
+
+  text.textContent = msg;
+
+  toast.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=> toast.classList.remove("show"), ms);
+}
+
 // ====== GitHub API ======
 function toBase64Utf8(str){
   return btoa(unescape(encodeURIComponent(str)));
@@ -189,7 +306,7 @@ async function githubGetFile(token){
     throw new Error("GitHub read failed: " + t);
   }
 
-  const json = await res.json();
+  const json = await res.json(); // has content + sha
   const content = decodeURIComponent(escape(atob((json.content || "").replace(/\n/g,""))));
   return { data: JSON.parse(content), sha: json.sha };
 }
@@ -206,10 +323,7 @@ async function githubPutFile(newData, sha, token){
 
   const res = await fetch(api, {
     method: "PUT",
-    headers: {
-      ...ghHeaders(token),
-      "Content-Type": "application/json"
-    },
+    headers: { ...ghHeaders(token), "Content-Type": "application/json" },
     body: JSON.stringify(body)
   });
 
@@ -221,7 +335,7 @@ async function githubPutFile(newData, sha, token){
   return await res.json();
 }
 
-// Чтение через GitHub Pages (без токена)
+// GitHub Pages read (без токена)
 async function pagesGetFile(){
   const url = `${GITHUB_PATH}?v=${Date.now()}`;
   const res = await fetch(url, { cache: "no-store" });
@@ -246,7 +360,7 @@ async function autoLoadState(){
   return { from: ok ? "cache" : "empty" };
 }
 
-// ====== Token modal (используем HTML из index.html) ======
+// ====== Token modal logic (используем HTML-модалку из index) ======
 function getSavedToken(){
   return sessionStorage.getItem(TOKEN_SESSION_KEY)
     || localStorage.getItem(TOKEN_LOCAL_KEY)
@@ -258,118 +372,97 @@ function clearSavedToken(){
   localStorage.removeItem(TOKEN_LOCAL_KEY);
 }
 
-// Показываем модалку токена и возвращаем token или null
-function askTokenFromHtml(){
-  const wrap = document.getElementById("tokenWrap");
-  const closeX = document.getElementById("tokenClose");
-  const input = document.getElementById("tokenInput");
-  const remember = document.getElementById("tokenRemember");
-  const err = document.getElementById("tokenError");
-  const cancel = document.getElementById("tokenCancel");
-  const testBtn = document.getElementById("tokenTest");
-  const okBtn = document.getElementById("tokenOk");
-
-  if(!wrap || !input || !remember || !cancel || !okBtn){
-    alert("Token modal не найден в index.html (tokenWrap/tokenInput/...).");
-    return Promise.resolve(null);
+function openTokenModal({ prefill = "" } = {}){
+  if(!tokenWrap || !tokenInput || !tokenOk || !tokenCancel) {
+    // если вдруг модалки нет — просто спросим через prompt (крайний случай)
+    const t = prompt("Вставь GitHub token:");
+    return Promise.resolve(t ? { token: t.trim(), remember: false } : null);
   }
 
-  function open(){
-    wrap.classList.add("open");
-    wrap.setAttribute("aria-hidden","false");
-    err.style.display = "none";
-    err.textContent = "";
-    input.value = getSavedToken() || "";
-    remember.checked = !!localStorage.getItem(TOKEN_LOCAL_KEY);
-    setTimeout(()=>input.focus(), 60);
-  }
+  const setErr = (msg, ok=false)=>{
+    if(!tokenError) return;
+    tokenError.style.display = msg ? "block" : "none";
+    tokenError.textContent = msg || "";
+    tokenError.style.color = ok ? "rgba(120,220,160,1)" : "rgba(192,75,75,1)";
+  };
 
-  function close(){
-    wrap.classList.remove("open");
-    wrap.setAttribute("aria-hidden","true");
-  }
+  tokenWrap.classList.add("open");
+  tokenWrap.setAttribute("aria-hidden","false");
 
-  function showError(msg){
-    err.textContent = msg || "Ошибка";
-    err.style.display = "block";
-  }
+  setErr("");
+  tokenInput.value = prefill || getSavedToken() || "";
+  tokenRemember.checked = !!localStorage.getItem(TOKEN_LOCAL_KEY);
+
+  setTimeout(()=> tokenInput.focus(), 60);
 
   return new Promise((resolve)=>{
-    open();
+    let done = false;
 
-    const cleanup = ()=>{
-      closeX?.removeEventListener("click", onCancel);
-      cancel.removeEventListener("click", onCancel);
-      okBtn.removeEventListener("click", onOk);
-      testBtn?.removeEventListener("click", onTest);
-      wrap.removeEventListener("click", onBackdrop);
-      input.removeEventListener("keydown", onKey);
-    };
+    const close = (result=null)=>{
+      if(done) return;
+      done = true;
 
-    const onCancel = ()=>{
-      close();
-      cleanup();
-      resolve(null);
-    };
+      tokenWrap.classList.remove("open");
+      tokenWrap.setAttribute("aria-hidden","true");
 
-    const onBackdrop = (e)=>{
-      if(e.target === wrap) onCancel();
-    };
+      tokenOk.removeEventListener("click", onOk);
+      tokenCancel.removeEventListener("click", onCancel);
+      tokenClose?.removeEventListener("click", onCancel);
+      tokenTest?.removeEventListener("click", onTest);
+      tokenWrap.removeEventListener("click", onBackdrop);
+      document.removeEventListener("keydown", onKey);
 
-    const onKey = (e)=>{
-      if(e.key === "Enter") onOk();
-      if(e.key === "Escape") onCancel();
+      resolve(result);
     };
 
     const onOk = ()=>{
-      const token = (input.value || "").trim();
-      if(!token){
-        showError("Вставь токен.");
-        return;
-      }
-      if(remember.checked){
+      const token = (tokenInput.value || "").trim();
+      if(!token){ setErr("Вставь токен."); return; }
+
+      if(tokenRemember.checked){
         localStorage.setItem(TOKEN_LOCAL_KEY, token);
         sessionStorage.removeItem(TOKEN_SESSION_KEY);
       }else{
         sessionStorage.setItem(TOKEN_SESSION_KEY, token);
         localStorage.removeItem(TOKEN_LOCAL_KEY);
       }
-      close();
-      cleanup();
-      resolve({ token, remember: remember.checked });
+      close({ token, remember: tokenRemember.checked });
+    };
+
+    const onCancel = ()=> close(null);
+
+    const onBackdrop = (e)=>{
+      if(e.target === tokenWrap) onCancel();
+    };
+
+    const onKey = (e)=>{
+      if(!tokenWrap.classList.contains("open")) return;
+      if(e.key === "Escape") onCancel();
+      if(e.key === "Enter") onOk();
     };
 
     const onTest = async ()=>{
-      const token = (input.value || "").trim();
-      if(!token){
-        showError("Вставь токен.");
-        return;
-      }
+      const token = (tokenInput.value || "").trim();
+      if(!token){ setErr("Вставь токен."); return; }
+
+      setErr("Проверяю…", true);
       try{
-        testBtn.disabled = true;
-        testBtn.textContent = "Проверяю...";
         await githubGetFile(token);
-        showError(""); // очистим
-        err.style.display = "none";
-        alert("Токен подходит ✅");
+        setErr("Токен подходит ✅", true);
       }catch(e){
-        showError("Не подошёл (или истёк/нет прав):\n" + (e?.message || ""));
-      }finally{
-        testBtn.disabled = false;
-        testBtn.textContent = "Проверить";
+        setErr("Токен не подошёл (или истёк/нет прав).\n" + (e?.message || ""), false);
       }
     };
 
-    closeX?.addEventListener("click", onCancel);
-    cancel.addEventListener("click", onCancel);
-    okBtn.addEventListener("click", onOk);
-    testBtn?.addEventListener("click", onTest);
-    wrap.addEventListener("click", onBackdrop);
-    input.addEventListener("keydown", onKey);
+    tokenOk.addEventListener("click", onOk);
+    tokenCancel.addEventListener("click", onCancel);
+    tokenClose?.addEventListener("click", onCancel);
+    tokenTest?.addEventListener("click", onTest);
+    tokenWrap.addEventListener("click", onBackdrop);
+    document.addEventListener("keydown", onKey);
   });
 }
 
-// Проверяем сохранённый токен; если невалиден — просим ввести
 async function ensureValidToken(){
   const saved = getSavedToken();
   if(saved){
@@ -382,37 +475,88 @@ async function ensureValidToken(){
   }
 
   while(true){
-    const res = await askTokenFromHtml();
+    const res = await openTokenModal({ prefill: "" });
     if(!res) return null;
 
     try{
       await githubGetFile(res.token);
       return res.token;
     }catch(e){
-      // покажем ошибку прямо в модалке (она уже закроется после "Использовать")
-      // поэтому снова откроем и подсветим через alert + повтор
-      alert("Токен не подошёл (или истёк/нет прав).\n\n" + (e?.message || ""));
+      // снова открываем и показываем ошибку
       clearSavedToken();
+      await openTokenModal({ prefill: res.token });
+      // (пользователь может нажать Проверить/Использовать ещё раз)
+      // продолжим цикл, чтобы точно проверить
+      const again = getSavedToken();
+      if(!again) continue;
+      try{
+        await githubGetFile(again);
+        return again;
+      }catch{
+        clearSavedToken();
+      }
     }
   }
 }
 
-// ====== UI ======
+// ====== Save button icons (spinner/check) ======
+const SAVE_BTN_DEFAULT_HTML = saveGithubBtn ? saveGithubBtn.innerHTML : "";
+
+const ICON_SPINNER = `
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <circle cx="12" cy="12" r="8" stroke="white" stroke-width="2" opacity=".25"></circle>
+  <path d="M20 12a8 8 0 0 0-8-8" stroke="white" stroke-width="2" stroke-linecap="round"></path>
+</svg>
+`;
+
+const ICON_CHECK = `
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <line x1="4"  y1="13" x2="9"  y2="18"></line>
+  <line x1="9"  y1="18" x2="20" y2="7"></line>
+</svg>
+`;
+
+function setSaveBtnState(state){
+  if(!saveGithubBtn) return;
+
+  if(state === "default"){
+    saveGithubBtn.innerHTML = SAVE_BTN_DEFAULT_HTML;
+    saveGithubBtn.disabled = false;
+    saveGithubBtn.classList.remove("isSaving");
+    return;
+  }
+
+  if(state === "loading"){
+    saveGithubBtn.innerHTML = ICON_SPINNER;
+    saveGithubBtn.disabled = true;
+    saveGithubBtn.classList.add("isSaving");
+    return;
+  }
+
+  if(state === "done"){
+    saveGithubBtn.innerHTML = ICON_CHECK;
+    saveGithubBtn.disabled = true;
+    saveGithubBtn.classList.remove("isSaving");
+    return;
+  }
+}
+
+// ====== UI (create/edit modal) ======
 function openModal(title){
-  modalTitle.textContent = title;
-  modalWrap.classList.add("open");
-  modalWrap.setAttribute("aria-hidden","false");
+  if(modalTitle) modalTitle.textContent = title;
+  modalWrap?.classList.add("open");
+  modalWrap?.setAttribute("aria-hidden","false");
 }
 function closeModalFn(){
-  modalWrap.classList.remove("open");
-  modalWrap.setAttribute("aria-hidden","true");
+  modalWrap?.classList.remove("open");
+  modalWrap?.setAttribute("aria-hidden","true");
 }
 
 closeModal?.addEventListener("click", closeModalFn);
 cancelBtn?.addEventListener("click", closeModalFn);
 modalWrap?.addEventListener("click", (e)=>{ if(e.target === modalWrap) closeModalFn(); });
 
-// показать/скрыть кнопки действий на карточках
+// ====== actions mode (show/hide card buttons) ======
 function setActionsMode(on){
   actionsMode = !!on;
   document.body.classList.toggle("actionsOn", actionsMode);
@@ -422,9 +566,7 @@ function setActionsMode(on){
     actionsIconDone.style.display = actionsMode ? "block" : "none";
   }
 }
-actionsBtn?.addEventListener("click", ()=>{
-  setActionsMode(!actionsMode);
-});
+actionsBtn?.addEventListener("click", ()=> setActionsMode(!actionsMode));
 
 // ====== reorder mode ======
 function enableReorder(){
@@ -466,19 +608,20 @@ function disableReorder(){
 // ====== render ======
 function applyFilter(){
   banks.sort((a,b) => (b.order ?? 0) - (a.order ?? 0));
-
   const q = norm(query);
   filtered = banks.filter(b => !q || norm(b.name).includes(q));
   renderList();
 }
 
 function renderList(){
+  if(!grid) return;
+
   grid.innerHTML = "";
   if(!filtered.length){
-    empty.style.display = "block";
+    if(empty) empty.style.display = "block";
     return;
   }
-  empty.style.display = "none";
+  if(empty) empty.style.display = "none";
 
   for(const b of filtered){
     const goal = (b.goal && b.goal > 0) ? b.goal : null;
@@ -514,10 +657,10 @@ function renderList(){
       </div>
     `;
 
-    card.querySelector('[data-act="deposit"]').addEventListener("click", ()=>openOp("deposit", b.id));
-    card.querySelector('[data-act="withdraw"]').addEventListener("click", ()=>openOp("withdraw", b.id));
-    card.querySelector('[data-act="edit"]').addEventListener("click", ()=>openEdit(b.id));
-    card.querySelector('[data-act="delete"]').addEventListener("click", ()=>deleteBank(b.id));
+    card.querySelector('[data-act="deposit"]')?.addEventListener("click", ()=>openOp("deposit", b.id));
+    card.querySelector('[data-act="withdraw"]')?.addEventListener("click", ()=>openOp("withdraw", b.id));
+    card.querySelector('[data-act="edit"]')?.addEventListener("click", ()=>openEdit(b.id));
+    card.querySelector('[data-act="delete"]')?.addEventListener("click", ()=>deleteBank(b.id));
 
     grid.appendChild(card);
   }
@@ -525,19 +668,17 @@ function renderList(){
   if(reorderMode) enableReorder();
 }
 
-function render(){
-  applyFilter();
-}
+function render(){ applyFilter(); }
 
-// ====== actions ======
+// ====== actions (create/edit/ops) ======
 function openCreate(){
   modalMode = "create";
   editingId = null;
-  createForm.style.display = "block";
-  opForm.style.display = "none";
-  f_name.value = "";
-  f_goal.value = "";
-  f_start.value = "";
+  if(createForm) createForm.style.display = "block";
+  if(opForm) opForm.style.display = "none";
+  if(f_name) f_name.value = "";
+  if(f_goal) f_goal.value = "";
+  if(f_start) f_start.value = "";
   openModal("Создать копилку");
 }
 
@@ -548,31 +689,33 @@ function openEdit(id){
   modalMode = "edit";
   editingId = id;
 
-  createForm.style.display = "block";
-  opForm.style.display = "none";
+  if(createForm) createForm.style.display = "block";
+  if(opForm) opForm.style.display = "none";
 
-  f_name.value = b.name;
-  f_goal.value = (b.goal && b.goal > 0) ? String(Math.round(b.goal)) : "";
-  f_start.value = String(Math.round(b.balance));
+  if(f_name) f_name.value = b.name;
+  if(f_goal) f_goal.value = (b.goal && b.goal > 0) ? String(Math.round(b.goal)) : "";
+  if(f_start) f_start.value = String(Math.round(b.balance));
 
   openModal("Изменить копилку");
 }
 
 function openOp(type, id=null){
   modalMode = type; // deposit | withdraw
-  createForm.style.display = "none";
-  opForm.style.display = "block";
+  if(createForm) createForm.style.display = "none";
+  if(opForm) opForm.style.display = "block";
 
   setSelectBanks();
-  if(id) f_bank.value = id;
+  if(id && f_bank) f_bank.value = id;
 
-  f_amount.value = "";
-  opHint.textContent = (type === "deposit")
-    ? "Сумма будет добавлена к балансу."
-    : "Сумма будет вычтена (не уйдёт в минус).";
+  if(f_amount) f_amount.value = "";
+  if(opHint){
+    opHint.textContent = (type === "deposit")
+      ? "Сумма будет добавлена к балансу."
+      : "Сумма будет вычтена (не уйдёт в минус).";
+  }
 
   openModal(type === "deposit" ? "Пополнить" : "Вывести");
-  setTimeout(()=>f_amount.focus(), 60);
+  setTimeout(()=>f_amount?.focus(), 60);
 }
 
 function deleteBank(id){
@@ -586,14 +729,11 @@ function deleteBank(id){
 
 function saveFromModal(){
   if(modalMode === "create" || modalMode === "edit"){
-    const name = (f_name.value || "").trim();
-    const goalRaw = (f_goal.value || "").trim();
-    const startRaw = (f_start.value || "").trim();
+    const name = (f_name?.value || "").trim();
+    const goalRaw = (f_goal?.value || "").trim();
+    const startRaw = (f_start?.value || "").trim();
 
-    if(!name){
-      alert("Введите название копилки.");
-      return;
-    }
+    if(!name){ alert("Введите название копилки."); return; }
 
     const goal = goalRaw ? parseNum(goalRaw) : null;
     if(goalRaw && (goal === null || goal <= 0)){
@@ -626,22 +766,13 @@ function saveFromModal(){
   }
 
   if(modalMode === "deposit" || modalMode === "withdraw"){
-    if(!banks.length){
-      alert("Сначала создай копилку.");
-      return;
-    }
+    if(!banks.length){ alert("Сначала создай копилку."); return; }
 
-    const id = f_bank.value;
-    const amt = parseNum(f_amount.value);
+    const id = f_bank?.value;
+    const amt = parseNum(f_amount?.value);
 
-    if(!id){
-      alert("Выберите копилку.");
-      return;
-    }
-    if(amt === null || amt <= 0){
-      alert("Введите сумму больше 0.");
-      return;
-    }
+    if(!id){ alert("Выберите копилку."); return; }
+    if(amt === null || amt <= 0){ alert("Введите сумму больше 0."); return; }
 
     const b = banks.find(x => x.id === id);
     if(!b) return;
@@ -670,10 +801,7 @@ withdrawBtn?.addEventListener("click", ()=>{
 
 // ====== search ======
 if(clearSearch) clearSearch.style.display = "none";
-function syncClear(){
-  if(!clearSearch || !searchInput) return;
-  clearSearch.style.display = searchInput.value ? "block" : "none";
-}
+function syncClear(){ if(clearSearch) clearSearch.style.display = searchInput?.value ? "block" : "none"; }
 
 searchInput?.addEventListener("input", ()=>{
   query = searchInput.value;
@@ -688,55 +816,6 @@ clearSearch?.addEventListener("click", ()=>{
   searchInput.focus();
 });
 syncClear();
-
-// ====== Save button icon states (spinner + check) ======
-const SAVE_BTN_DEFAULT_HTML = saveGithubBtn ? saveGithubBtn.innerHTML : "";
-
-// SVG "часы" (крутилка)
-const SVG_CLOCK = `
-<svg viewBox="0 0 24 24" aria-hidden="true" class="spinIcon">
-  <circle cx="12" cy="12" r="9"></circle>
-  <line x1="12" y1="7" x2="12" y2="12"></line>
-  <line x1="12" y1="12" x2="15.5" y2="13.8"></line>
-</svg>`;
-
-// SVG "галочка"
-const SVG_CHECK = `
-<svg viewBox="0 0 24 24" aria-hidden="true">
-  <line x1="4"  y1="13" x2="9"  y2="18"></line>
-  <line x1="9"  y1="18" x2="20" y2="7"></line>
-</svg>`;
-
-(function injectSpinCssOnce(){
-  if(document.getElementById("spinIconCss")) return;
-  const style = document.createElement("style");
-  style.id = "spinIconCss";
-  style.textContent = `
-    @keyframes tscSpin { from{ transform: rotate(0deg); } to{ transform: rotate(360deg); } }
-    .spinIcon { animation: tscSpin 1s linear infinite; transform-origin: 50% 50%; }
-  `;
-  document.head.appendChild(style);
-})();
-
-function setSaveBtnState(state){
-  if(!saveGithubBtn) return;
-
-  if(state === "loading"){
-    saveGithubBtn.innerHTML = SVG_CLOCK;
-    saveGithubBtn.disabled = true;
-    saveGithubBtn.title = "Сохраняю...";
-    return;
-  }
-  if(state === "done"){
-    saveGithubBtn.innerHTML = SVG_CHECK;
-    saveGithubBtn.disabled = false;
-    saveGithubBtn.title = "Сохранено";
-    return;
-  }
-  saveGithubBtn.innerHTML = SAVE_BTN_DEFAULT_HTML;
-  saveGithubBtn.disabled = false;
-  saveGithubBtn.title = "Сохранить в GitHub";
-}
 
 // ====== GitHub buttons ======
 loadGithubBtn?.addEventListener("click", async ()=>{
@@ -783,7 +862,8 @@ saveGithubBtn?.addEventListener("click", async ()=>{
     setSaveBtnState("done");
     setTimeout(()=> setSaveBtnState("default"), 1200);
 
-    alert("Сохранено в GitHub. GitHub Pages может обновляться 10–60 секунд.");
+    // ✅ вместо alert — стилизованный toast
+    showToast("Изменения сохранены. Обновление займёт 10–60 секунд.");
   }catch(e){
     console.error(e);
     alert("Ошибка сохранения в GitHub: " + e.message);
@@ -816,6 +896,9 @@ orderBtn?.addEventListener("click", ()=>{
 
   // по умолчанию кнопки скрыты
   setActionsMode(false);
+
+  // на всякий — вернуть исходный вид кнопки save
+  setSaveBtnState("default");
 
   render();
 })();
