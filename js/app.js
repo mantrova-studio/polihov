@@ -1,4 +1,4 @@
-// ====== SETTINGS (GitHub) ====== 
+// ====== SETTINGS (GitHub) ======
 const APP_KEY = "tsc_piggy_v2_cache";
 
 const GITHUB_OWNER = "mantrova-studio";
@@ -22,7 +22,7 @@ const saveGithubBtn = document.getElementById("saveGithubBtn");
 
 const orderBtn = document.getElementById("orderBtn");
 
-// кнопка “показать/скрыть кнопки на карточках”
+// actions toggle (show/hide card actions)
 const actionsBtn = document.getElementById("actionsBtn");
 const actionsIconEdit = document.getElementById("actionsIconEdit");
 const actionsIconDone = document.getElementById("actionsIconDone");
@@ -30,7 +30,7 @@ const actionsIconDone = document.getElementById("actionsIconDone");
 const searchInput = document.getElementById("searchInput");
 const clearSearch = document.getElementById("clearSearch");
 
-// modal
+// modal (create/edit/ops)
 const modalWrap = document.getElementById("modalWrap");
 const modalTitle = document.getElementById("modalTitle");
 const closeModal = document.getElementById("closeModal");
@@ -48,6 +48,16 @@ const f_start = document.getElementById("f_start");
 const f_bank = document.getElementById("f_bank");
 const f_amount = document.getElementById("f_amount");
 
+// token modal (from index.html)
+const tokenWrap = document.getElementById("tokenWrap");
+const tokenClose = document.getElementById("tokenClose");
+const tokenCancel = document.getElementById("tokenCancel");
+const tokenTest = document.getElementById("tokenTest");
+const tokenOk = document.getElementById("tokenOk");
+const tokenInput = document.getElementById("tokenInput");
+const tokenRemember = document.getElementById("tokenRemember");
+const tokenError = document.getElementById("tokenError");
+
 // ====== STATE ======
 let banks = [];
 let filtered = [];
@@ -60,8 +70,59 @@ let editingId = null;
 let reorderMode = false;
 let sortable = null;
 
-// actions mode (показывать кнопки на карточках)
+// actions mode (show buttons on cards)
 let actionsMode = false;
+
+// ====== SVG icons for buttons ======
+const ICONS = {
+  plus: `
+    <svg viewBox="0 0 24 24">
+      <line x1="12" y1="5" x2="12" y2="19"/>
+      <line x1="5" y1="12" x2="19" y2="12"/>
+    </svg>
+  `,
+  minus: `
+    <svg viewBox="0 0 24 24">
+      <line x1="5" y1="12" x2="19" y2="12"/>
+    </svg>
+  `,
+  pencil: `
+    <svg viewBox="0 0 24 24">
+      <line x1="4" y1="20" x2="8" y2="19"/>
+      <line x1="8" y1="19" x2="19" y2="8"/>
+      <line x1="19" y1="8" x2="16" y2="5"/>
+      <line x1="16" y1="5" x2="5" y2="16"/>
+    </svg>
+  `,
+  trash: `
+    <svg viewBox="0 0 24 24">
+      <line x1="5" y1="7" x2="19" y2="7"/>
+      <line x1="9" y1="7" x2="9" y2="19"/>
+      <line x1="15" y1="7" x2="15" y2="19"/>
+      <line x1="8" y1="7" x2="8" y2="5"/>
+      <line x1="16" y1="7" x2="16" y2="5"/>
+    </svg>
+  `,
+  spinner: `
+    <svg class="spin" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="8" stroke="white" stroke-width="2" opacity=".25" fill="none"/>
+      <path d="M20 12a8 8 0 0 0-8-8" stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/>
+    </svg>
+  `,
+  check: `
+    <svg viewBox="0 0 24 24">
+      <line x1="4"  y1="13" x2="9"  y2="18"/>
+      <line x1="9"  y1="18" x2="20" y2="7"/>
+    </svg>
+  `,
+  clock: `
+    <svg viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="8" fill="none"/>
+      <line x1="12" y1="7" x2="12" y2="12"/>
+      <line x1="12" y1="12" x2="15" y2="14"/>
+    </svg>
+  `
+};
 
 // ====== helpers ======
 function escapeHtml(str){
@@ -107,6 +168,7 @@ function parseNum(val){
 }
 
 function setSelectBanks(){
+  if(!f_bank) return;
   f_bank.innerHTML = "";
   for(const b of banks){
     const opt = document.createElement("option");
@@ -221,7 +283,7 @@ async function githubPutFile(newData, sha, token){
   return await res.json();
 }
 
-// Чтение через GitHub Pages (без токена)
+// 2) Чтение через GitHub Pages (без токена)
 async function pagesGetFile(){
   const url = `${GITHUB_PATH}?v=${Date.now()}`;
   const res = await fetch(url, { cache: "no-store" });
@@ -246,131 +308,279 @@ async function autoLoadState(){
   return { from: ok ? "cache" : "empty" };
 }
 
-// ====== Token modal (используем HTML из index.html) ======
+// ====== Toast (TSC style) ======
+function ensureToastOnce(){
+  if(document.getElementById("toastWrap")) return;
+
+  const style = document.createElement("style");
+  style.textContent = `
+    .toastWrap{
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 999999;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      pointer-events:none;
+      padding: 0 12px;
+      width:min(520px, calc(100% - 24px));
+    }
+    .toast{
+      pointer-events:auto;
+      background: rgba(18,26,42,.92);
+      border: 1px solid rgba(43,58,85,.9);
+      border-radius: 14px;
+      box-shadow: 0 18px 60px rgba(0,0,0,.55);
+      padding: 12px 12px;
+      display:flex;
+      gap:10px;
+      align-items:flex-start;
+      animation: toastIn .18s ease-out;
+    }
+    @keyframes toastIn{
+      from{ opacity:0; transform: translateY(10px); }
+      to{ opacity:1; transform: translateY(0); }
+    }
+    .toastIcon{
+      width:34px; height:34px;
+      border-radius: 12px;
+      display:grid;
+      place-items:center;
+      border:1px solid rgba(43,58,85,.85);
+      background: rgba(30,42,66,.75);
+      flex:0 0 auto;
+    }
+    .toastIcon svg{
+      width:18px; height:18px;
+      stroke:white; stroke-width:2; fill:none; opacity:.9;
+    }
+    .toastBody{ flex:1 1 auto; }
+    .toastTitle{
+      font-weight:800;
+      font-size:14px;
+      line-height:1.2;
+    }
+    .toastMsg{
+      margin-top:4px;
+      color: rgba(255,255,255,.65);
+      font-size:13px;
+      line-height:1.35;
+      white-space:pre-wrap;
+    }
+    .toastClose{
+      width:34px; height:34px;
+      border-radius: 12px;
+      display:grid; place-items:center;
+      border:1px solid rgba(43,58,85,.85);
+      background: rgba(30,42,66,.75);
+      color:#fff;
+      cursor:pointer;
+      flex:0 0 auto;
+    }
+    .toastClose:hover{ background: rgba(36,54,84,.85); border-color: rgba(63,91,135,.9); }
+  `;
+  document.head.appendChild(style);
+
+  const wrap = document.createElement("div");
+  wrap.id = "toastWrap";
+  wrap.className = "toastWrap";
+  document.body.appendChild(wrap);
+}
+
+function toast({ title="Готово", message="", icon="check", timeout=2600 } = {}){
+  ensureToastOnce();
+  const wrap = document.getElementById("toastWrap");
+  if(!wrap) return;
+
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.innerHTML = `
+    <div class="toastIcon">${ICONS[icon] || ICONS.check}</div>
+    <div class="toastBody">
+      <div class="toastTitle">${escapeHtml(title)}</div>
+      <div class="toastMsg">${escapeHtml(message)}</div>
+    </div>
+    <button class="toastClose" type="button" aria-label="Закрыть">✕</button>
+  `;
+
+  const close = ()=>{
+    el.style.opacity = "0";
+    el.style.transform = "translateY(10px)";
+    el.style.transition = "all .16s ease";
+    setTimeout(()=> el.remove(), 180);
+  };
+
+  el.querySelector(".toastClose").addEventListener("click", close);
+
+  wrap.appendChild(el);
+
+  if(timeout && timeout > 0){
+    setTimeout(close, timeout);
+  }
+}
+
+// ====== Save button states (spinner/check) ======
+let SAVE_BTN_DEFAULT_HTML = null;
+
+function initSaveBtnDefault(){
+  if(!saveGithubBtn) return;
+  if(SAVE_BTN_DEFAULT_HTML == null){
+    SAVE_BTN_DEFAULT_HTML = saveGithubBtn.innerHTML; // original cloud icon in header
+  }
+}
+
+function setSaveBtnState(state){
+  if(!saveGithubBtn) return;
+  initSaveBtnDefault();
+
+  if(state === "loading"){
+    saveGithubBtn.innerHTML = ICONS.spinner;
+    saveGithubBtn.disabled = true;
+  }else if(state === "done"){
+    saveGithubBtn.innerHTML = ICONS.check;
+    saveGithubBtn.disabled = true;
+  }else{
+    saveGithubBtn.innerHTML = SAVE_BTN_DEFAULT_HTML;
+    saveGithubBtn.disabled = false;
+  }
+}
+
+// ====== Token modal logic (use existing HTML) ======
 function getSavedToken(){
   return sessionStorage.getItem(TOKEN_SESSION_KEY)
     || localStorage.getItem(TOKEN_LOCAL_KEY)
     || "";
 }
-
 function clearSavedToken(){
   sessionStorage.removeItem(TOKEN_SESSION_KEY);
   localStorage.removeItem(TOKEN_LOCAL_KEY);
 }
 
-// Показываем модалку токена и возвращаем token или null
-function askTokenFromHtml(){
-  const wrap = document.getElementById("tokenWrap");
-  const closeX = document.getElementById("tokenClose");
-  const input = document.getElementById("tokenInput");
-  const remember = document.getElementById("tokenRemember");
-  const err = document.getElementById("tokenError");
-  const cancel = document.getElementById("tokenCancel");
-  const testBtn = document.getElementById("tokenTest");
-  const okBtn = document.getElementById("tokenOk");
+function showTokenModal(){
+  if(!tokenWrap) return;
+  tokenWrap.classList.add("open");
+  tokenWrap.setAttribute("aria-hidden","false");
 
-  if(!wrap || !input || !remember || !cancel || !okBtn){
-    alert("Token modal не найден в index.html (tokenWrap/tokenInput/...).");
-    return Promise.resolve(null);
+  if(tokenError){
+    tokenError.style.display = "none";
+    tokenError.textContent = "";
   }
 
-  function open(){
-    wrap.classList.add("open");
-    wrap.setAttribute("aria-hidden","false");
-    err.style.display = "none";
-    err.textContent = "";
-    input.value = getSavedToken() || "";
-    remember.checked = !!localStorage.getItem(TOKEN_LOCAL_KEY);
-    setTimeout(()=>input.focus(), 60);
+  if(tokenInput){
+    tokenInput.value = getSavedToken() || "";
+    setTimeout(()=>tokenInput.focus(), 60);
   }
-
-  function close(){
-    wrap.classList.remove("open");
-    wrap.setAttribute("aria-hidden","true");
+  if(tokenRemember){
+    tokenRemember.checked = !!localStorage.getItem(TOKEN_LOCAL_KEY);
   }
+}
 
-  function showError(msg){
-    err.textContent = msg || "Ошибка";
-    err.style.display = "block";
+function hideTokenModal(){
+  if(!tokenWrap) return;
+  tokenWrap.classList.remove("open");
+  tokenWrap.setAttribute("aria-hidden","true");
+}
+
+function tokenModalError(msg){
+  if(!tokenError) return;
+  tokenError.textContent = msg || "Ошибка";
+  tokenError.style.display = "block";
+}
+
+function saveToken(token){
+  if(!token) return;
+  if(tokenRemember?.checked){
+    localStorage.setItem(TOKEN_LOCAL_KEY, token);
+    sessionStorage.removeItem(TOKEN_SESSION_KEY);
+  }else{
+    sessionStorage.setItem(TOKEN_SESSION_KEY, token);
+    localStorage.removeItem(TOKEN_LOCAL_KEY);
   }
+}
 
-  return new Promise((resolve)=>{
-    open();
+async function testToken(token){
+  await githubGetFile(token); // quick read test (needs repo read permission)
+  return true;
+}
 
-    const cleanup = ()=>{
-      closeX?.removeEventListener("click", onCancel);
-      cancel.removeEventListener("click", onCancel);
-      okBtn.removeEventListener("click", onOk);
-      testBtn?.removeEventListener("click", onTest);
-      wrap.removeEventListener("click", onBackdrop);
-      input.removeEventListener("keydown", onKey);
-    };
+function bindTokenModalOnce(){
+  if(!tokenWrap) return;
+  if(tokenWrap.dataset.bound === "1") return;
+  tokenWrap.dataset.bound = "1";
 
-    const onCancel = ()=>{
-      close();
-      cleanup();
-      resolve(null);
-    };
+  tokenClose?.addEventListener("click", hideTokenModal);
+  tokenCancel?.addEventListener("click", hideTokenModal);
 
-    const onBackdrop = (e)=>{
-      if(e.target === wrap) onCancel();
-    };
+  // click outside modal closes
+  tokenWrap.addEventListener("click", (e)=>{
+    if(e.target === tokenWrap) hideTokenModal();
+  });
 
-    const onKey = (e)=>{
-      if(e.key === "Enter") onOk();
-      if(e.key === "Escape") onCancel();
-    };
+  // Esc closes, Enter uses
+  tokenInput?.addEventListener("keydown", (e)=>{
+    if(e.key === "Escape") hideTokenModal();
+    if(e.key === "Enter") tokenOk?.click();
+  });
 
-    const onOk = ()=>{
-      const token = (input.value || "").trim();
-      if(!token){
-        showError("Вставь токен.");
-        return;
+  tokenTest?.addEventListener("click", async ()=>{
+    const token = (tokenInput?.value || "").trim();
+    if(!token){
+      tokenModalError("Вставь токен.");
+      return;
+    }
+
+    tokenTest.disabled = true;
+    tokenTest.textContent = "Проверяю…";
+    try{
+      await testToken(token);
+      saveToken(token);
+      if(tokenError){
+        tokenError.style.display = "none";
+        tokenError.textContent = "";
       }
-      if(remember.checked){
-        localStorage.setItem(TOKEN_LOCAL_KEY, token);
-        sessionStorage.removeItem(TOKEN_SESSION_KEY);
-      }else{
-        sessionStorage.setItem(TOKEN_SESSION_KEY, token);
-        localStorage.removeItem(TOKEN_LOCAL_KEY);
-      }
-      close();
-      cleanup();
-      resolve({ token, remember: remember.checked });
-    };
+      toast({
+        title: "Токен OK",
+        message: "Токен подходит. Можно сохранять.",
+        icon: "check",
+        timeout: 2200
+      });
+    }catch(e){
+      clearSavedToken();
+      tokenModalError("Токен не подошёл (или истёк/нет прав).\n\n" + (e?.message || ""));
+    }finally{
+      tokenTest.disabled = false;
+      tokenTest.textContent = "Проверить";
+    }
+  });
 
-    const onTest = async ()=>{
-      const token = (input.value || "").trim();
-      if(!token){
-        showError("Вставь токен.");
-        return;
-      }
-      try{
-        testBtn.disabled = true;
-        testBtn.textContent = "Проверяю...";
-        await githubGetFile(token);
-        showError(""); // очистим
-        err.style.display = "none";
-        alert("Токен подходит ✅");
-      }catch(e){
-        showError("Не подошёл (или истёк/нет прав):\n" + (e?.message || ""));
-      }finally{
-        testBtn.disabled = false;
-        testBtn.textContent = "Проверить";
-      }
-    };
+  tokenOk?.addEventListener("click", async ()=>{
+    const token = (tokenInput?.value || "").trim();
+    if(!token){
+      tokenModalError("Вставь токен.");
+      return;
+    }
 
-    closeX?.addEventListener("click", onCancel);
-    cancel.addEventListener("click", onCancel);
-    okBtn.addEventListener("click", onOk);
-    testBtn?.addEventListener("click", onTest);
-    wrap.addEventListener("click", onBackdrop);
-    input.addEventListener("keydown", onKey);
+    tokenOk.disabled = true;
+    tokenOk.textContent = "Проверяю…";
+    try{
+      await testToken(token);
+      saveToken(token);
+      hideTokenModal();
+    }catch(e){
+      clearSavedToken();
+      tokenModalError("Токен не подошёл (или истёк/нет прав).\n\n" + (e?.message || ""));
+    }finally{
+      tokenOk.disabled = false;
+      tokenOk.textContent = "Использовать";
+    }
   });
 }
 
-// Проверяем сохранённый токен; если невалиден — просим ввести
 async function ensureValidToken(){
+  bindTokenModalOnce();
+
   const saved = getSavedToken();
   if(saved){
     try{
@@ -381,29 +591,37 @@ async function ensureValidToken(){
     }
   }
 
-  while(true){
-    const res = await askTokenFromHtml();
-    if(!res) return null;
+  // open modal and wait for user
+  showTokenModal();
 
-    try{
-      await githubGetFile(res.token);
-      return res.token;
-    }catch(e){
-      // покажем ошибку прямо в модалке (она уже закроется после "Использовать")
-      // поэтому снова откроем и подсветим через alert + повтор
-      alert("Токен не подошёл (или истёк/нет прав).\n\n" + (e?.message || ""));
-      clearSavedToken();
-    }
-  }
+  return await new Promise((resolve)=>{
+    const onDone = async ()=>{
+      // when modal closes, try to use saved token
+      const t = getSavedToken();
+      if(!tokenWrap?.classList.contains("open")){
+        // modal closed
+        cleanup();
+        resolve(t || null);
+      }
+    };
+
+    const cleanup = ()=>{
+      clearInterval(timer);
+    };
+
+    const timer = setInterval(onDone, 250);
+  });
 }
 
-// ====== UI ======
+// ====== UI (create/edit/ops modal) ======
 function openModal(title){
+  if(!modalTitle || !modalWrap) return;
   modalTitle.textContent = title;
   modalWrap.classList.add("open");
   modalWrap.setAttribute("aria-hidden","false");
 }
 function closeModalFn(){
+  if(!modalWrap) return;
   modalWrap.classList.remove("open");
   modalWrap.setAttribute("aria-hidden","true");
 }
@@ -412,7 +630,7 @@ closeModal?.addEventListener("click", closeModalFn);
 cancelBtn?.addEventListener("click", closeModalFn);
 modalWrap?.addEventListener("click", (e)=>{ if(e.target === modalWrap) closeModalFn(); });
 
-// показать/скрыть кнопки действий на карточках
+// actions mode
 function setActionsMode(on){
   actionsMode = !!on;
   document.body.classList.toggle("actionsOn", actionsMode);
@@ -422,13 +640,11 @@ function setActionsMode(on){
     actionsIconDone.style.display = actionsMode ? "block" : "none";
   }
 }
-actionsBtn?.addEventListener("click", ()=>{
-  setActionsMode(!actionsMode);
-});
+actionsBtn?.addEventListener("click", ()=> setActionsMode(!actionsMode));
 
-// ====== reorder mode ======
+// reorder mode
 function enableReorder(){
-  if(sortable || !window.Sortable) return;
+  if(sortable || !window.Sortable || !grid) return;
 
   document.body.classList.add("reorderOn");
 
@@ -473,12 +689,14 @@ function applyFilter(){
 }
 
 function renderList(){
+  if(!grid) return;
+
   grid.innerHTML = "";
   if(!filtered.length){
-    empty.style.display = "block";
+    if(empty) empty.style.display = "block";
     return;
   }
-  empty.style.display = "none";
+  if(empty) empty.style.display = "none";
 
   for(const b of filtered){
     const goal = (b.goal && b.goal > 0) ? b.goal : null;
@@ -507,10 +725,10 @@ function renderList(){
       </div>
 
       <div class="cardActions">
-        <button class="btn small primary" data-act="deposit">Пополнить</button>
-        <button class="btn small danger" data-act="withdraw">Вывести</button>
-        <button class="btn small" data-act="edit">Изменить</button>
-        <button class="btn small" data-act="delete">Удалить</button>
+        <button class="iconBtn primary" data-act="deposit" title="Пополнить">${ICONS.plus}</button>
+        <button class="iconBtn danger" data-act="withdraw" title="Вывести">${ICONS.minus}</button>
+        <button class="iconBtn" data-act="edit" title="Изменить">${ICONS.pencil}</button>
+        <button class="iconBtn danger" data-act="delete" title="Удалить">${ICONS.trash}</button>
       </div>
     `;
 
@@ -529,15 +747,15 @@ function render(){
   applyFilter();
 }
 
-// ====== actions ======
+// ====== actions (create/edit/ops) ======
 function openCreate(){
   modalMode = "create";
   editingId = null;
-  createForm.style.display = "block";
-  opForm.style.display = "none";
-  f_name.value = "";
-  f_goal.value = "";
-  f_start.value = "";
+  if(createForm) createForm.style.display = "block";
+  if(opForm) opForm.style.display = "none";
+  if(f_name) f_name.value = "";
+  if(f_goal) f_goal.value = "";
+  if(f_start) f_start.value = "";
   openModal("Создать копилку");
 }
 
@@ -548,31 +766,33 @@ function openEdit(id){
   modalMode = "edit";
   editingId = id;
 
-  createForm.style.display = "block";
-  opForm.style.display = "none";
+  if(createForm) createForm.style.display = "block";
+  if(opForm) opForm.style.display = "none";
 
-  f_name.value = b.name;
-  f_goal.value = (b.goal && b.goal > 0) ? String(Math.round(b.goal)) : "";
-  f_start.value = String(Math.round(b.balance));
+  if(f_name) f_name.value = b.name;
+  if(f_goal) f_goal.value = (b.goal && b.goal > 0) ? String(Math.round(b.goal)) : "";
+  if(f_start) f_start.value = String(Math.round(b.balance));
 
   openModal("Изменить копилку");
 }
 
 function openOp(type, id=null){
-  modalMode = type; // deposit | withdraw
-  createForm.style.display = "none";
-  opForm.style.display = "block";
+  modalMode = type;
+  if(createForm) createForm.style.display = "none";
+  if(opForm) opForm.style.display = "block";
 
   setSelectBanks();
-  if(id) f_bank.value = id;
+  if(id && f_bank) f_bank.value = id;
 
-  f_amount.value = "";
-  opHint.textContent = (type === "deposit")
-    ? "Сумма будет добавлена к балансу."
-    : "Сумма будет вычтена (не уйдёт в минус).";
+  if(f_amount) f_amount.value = "";
+  if(opHint){
+    opHint.textContent = (type === "deposit")
+      ? "Сумма будет добавлена к балансу."
+      : "Сумма будет вычтена (не уйдёт в минус).";
+  }
 
   openModal(type === "deposit" ? "Пополнить" : "Вывести");
-  setTimeout(()=>f_amount.focus(), 60);
+  setTimeout(()=>f_amount?.focus(), 60);
 }
 
 function deleteBank(id){
@@ -586,24 +806,24 @@ function deleteBank(id){
 
 function saveFromModal(){
   if(modalMode === "create" || modalMode === "edit"){
-    const name = (f_name.value || "").trim();
-    const goalRaw = (f_goal.value || "").trim();
-    const startRaw = (f_start.value || "").trim();
+    const name = (f_name?.value || "").trim();
+    const goalRaw = (f_goal?.value || "").trim();
+    const startRaw = (f_start?.value || "").trim();
 
     if(!name){
-      alert("Введите название копилки.");
+      toast({ title:"Ошибка", message:"Введите название копилки.", icon:"minus", timeout:2600 });
       return;
     }
 
     const goal = goalRaw ? parseNum(goalRaw) : null;
     if(goalRaw && (goal === null || goal <= 0)){
-      alert("Цель должна быть числом больше 0, либо оставьте пустым.");
+      toast({ title:"Ошибка", message:"Цель должна быть числом больше 0, либо оставьте пустым.", icon:"minus", timeout:3200 });
       return;
     }
 
     const start = startRaw ? parseNum(startRaw) : 0;
     if(start === null || start < 0){
-      alert("Стартовая сумма должна быть числом 0 или больше.");
+      toast({ title:"Ошибка", message:"Стартовая сумма должна быть числом 0 или больше.", icon:"minus", timeout:3200 });
       return;
     }
 
@@ -627,19 +847,19 @@ function saveFromModal(){
 
   if(modalMode === "deposit" || modalMode === "withdraw"){
     if(!banks.length){
-      alert("Сначала создай копилку.");
+      toast({ title:"Ошибка", message:"Сначала создай копилку.", icon:"minus", timeout:2600 });
       return;
     }
 
-    const id = f_bank.value;
-    const amt = parseNum(f_amount.value);
+    const id = f_bank?.value;
+    const amt = parseNum(f_amount?.value);
 
     if(!id){
-      alert("Выберите копилку.");
+      toast({ title:"Ошибка", message:"Выберите копилку.", icon:"minus", timeout:2600 });
       return;
     }
     if(amt === null || amt <= 0){
-      alert("Введите сумму больше 0.");
+      toast({ title:"Ошибка", message:"Введите сумму больше 0.", icon:"minus", timeout:2600 });
       return;
     }
 
@@ -681,6 +901,7 @@ searchInput?.addEventListener("input", ()=>{
   render();
 });
 clearSearch?.addEventListener("click", ()=>{
+  if(!searchInput) return;
   searchInput.value = "";
   query = "";
   syncClear();
@@ -688,55 +909,6 @@ clearSearch?.addEventListener("click", ()=>{
   searchInput.focus();
 });
 syncClear();
-
-// ====== Save button icon states (spinner + check) ======
-const SAVE_BTN_DEFAULT_HTML = saveGithubBtn ? saveGithubBtn.innerHTML : "";
-
-// SVG "часы" (крутилка)
-const SVG_CLOCK = `
-<svg viewBox="0 0 24 24" aria-hidden="true" class="spinIcon">
-  <circle cx="12" cy="12" r="9"></circle>
-  <line x1="12" y1="7" x2="12" y2="12"></line>
-  <line x1="12" y1="12" x2="15.5" y2="13.8"></line>
-</svg>`;
-
-// SVG "галочка"
-const SVG_CHECK = `
-<svg viewBox="0 0 24 24" aria-hidden="true">
-  <line x1="4"  y1="13" x2="9"  y2="18"></line>
-  <line x1="9"  y1="18" x2="20" y2="7"></line>
-</svg>`;
-
-(function injectSpinCssOnce(){
-  if(document.getElementById("spinIconCss")) return;
-  const style = document.createElement("style");
-  style.id = "spinIconCss";
-  style.textContent = `
-    @keyframes tscSpin { from{ transform: rotate(0deg); } to{ transform: rotate(360deg); } }
-    .spinIcon { animation: tscSpin 1s linear infinite; transform-origin: 50% 50%; }
-  `;
-  document.head.appendChild(style);
-})();
-
-function setSaveBtnState(state){
-  if(!saveGithubBtn) return;
-
-  if(state === "loading"){
-    saveGithubBtn.innerHTML = SVG_CLOCK;
-    saveGithubBtn.disabled = true;
-    saveGithubBtn.title = "Сохраняю...";
-    return;
-  }
-  if(state === "done"){
-    saveGithubBtn.innerHTML = SVG_CHECK;
-    saveGithubBtn.disabled = false;
-    saveGithubBtn.title = "Сохранено";
-    return;
-  }
-  saveGithubBtn.innerHTML = SAVE_BTN_DEFAULT_HTML;
-  saveGithubBtn.disabled = false;
-  saveGithubBtn.title = "Сохранить в GitHub";
-}
 
 // ====== GitHub buttons ======
 loadGithubBtn?.addEventListener("click", async ()=>{
@@ -750,17 +922,23 @@ loadGithubBtn?.addEventListener("click", async ()=>{
       ensureOrderFields();
       saveCache();
       render();
-      alert("Загружено из GitHub Pages.");
+      toast({ title:"Загружено", message:"Загружено из GitHub Pages.", icon:"check", timeout:2400 });
       return;
     }
 
+    // если Pages пусто — грузим из кеша
     const ok = loadCache();
     ensureOrderFields();
     render();
-    alert(ok ? "На Pages пока пусто. Показал локальный кеш." : "На Pages пока пусто и кеш пустой.");
+    toast({
+      title:"Готово",
+      message: ok ? "На Pages пока пусто. Показал локальный кеш." : "На Pages пока пусто и кеш пустой.",
+      icon:"clock",
+      timeout:3200
+    });
   }catch(e){
     console.error(e);
-    alert("Ошибка загрузки: " + e.message);
+    toast({ title:"Ошибка", message:"Ошибка загрузки: " + (e?.message || ""), icon:"minus", timeout:4200 });
   }finally{
     loadGithubBtn.disabled = false;
     loadGithubBtn.textContent = "Загрузить из GitHub";
@@ -781,13 +959,17 @@ saveGithubBtn?.addEventListener("click", async ()=>{
     await githubPutFile({ banks }, cur.sha, token);
 
     setSaveBtnState("done");
+    toast({
+      title: "Сохранено",
+      message: "Изменения сохранены. Обновление займёт 10–60 секунд.",
+      icon: "check",
+      timeout: 3600
+    });
     setTimeout(()=> setSaveBtnState("default"), 1200);
-
-    alert("Сохранено в GitHub. GitHub Pages может обновляться 10–60 секунд.");
   }catch(e){
     console.error(e);
-    alert("Ошибка сохранения в GitHub: " + e.message);
     setSaveBtnState("default");
+    toast({ title:"Ошибка", message:"Ошибка сохранения: " + (e?.message || ""), icon:"minus", timeout:5200 });
   }
 });
 
@@ -812,6 +994,8 @@ orderBtn?.addEventListener("click", ()=>{
 
 // ====== init ======
 (async function init(){
+  initSaveBtnDefault();
+  bindTokenModalOnce();
   await autoLoadState();
 
   // по умолчанию кнопки скрыты
