@@ -602,7 +602,7 @@ body.actionsOn .cardActions{ display:grid; }
 }
 
 /* (если хочешь 2x2 строго) */
-.cardActions{
+/*.cardActions{
   display:grid;
   grid-template-columns: repeat(4, 40px);
   gap:8px;
@@ -612,7 +612,7 @@ body.actionsOn .cardActions{ display:grid; }
   .cardActions{
     grid-template-columns: repeat(2, 40px);
   }
-}
+}*/
 
 /* ===== FIX: card actions must be hidden by default ===== */
 
