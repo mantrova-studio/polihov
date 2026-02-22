@@ -104,11 +104,20 @@ trash: `
   </svg>
 `,
   spinner: `
-    <svg class="spin" viewBox="0 0 24 24">
-      <circle cx="12" cy="12" r="8" stroke="white" stroke-width="2" opacity=".25" fill="none"/>
-      <path d="M20 12a8 8 0 0 0-8-8" stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/>
-    </svg>
-  `,
+  <svg class="spin" viewBox="0 0 24 24">
+    <circle
+      cx="12"
+      cy="12"
+      r="9"
+      stroke="white"
+      stroke-width="2"
+      fill="none"
+      stroke-linecap="round"
+      stroke-dasharray="50"
+      stroke-dashoffset="35"
+    />
+  </svg>
+`,
   check: `
     <svg viewBox="0 0 24 24">
       <line x1="4"  y1="13" x2="9"  y2="18"/>
