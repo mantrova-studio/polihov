@@ -613,3 +613,28 @@ body.actionsOn .cardActions{ display:grid; }
     grid-template-columns: repeat(2, 40px);
   }
 }
+
+/* ===== FIX: card actions must be hidden by default ===== */
+
+/* по умолчанию скрыто */
+body:not(.actionsOn) .cardActions{
+  display: none !important;
+}
+
+/* когда включён режим действий — показываем */
+body.actionsOn .cardActions{
+  display: grid !important; /* или flex, если хочешь */
+}
+
+/* если используешь grid-раскладку для 4 иконок */
+body.actionsOn .cardActions{
+  grid-template-columns: repeat(4, 40px);
+  gap: 8px;
+  justify-content: flex-start;
+}
+
+@media (max-width: 420px){
+  body.actionsOn .cardActions{
+    grid-template-columns: repeat(2, 40px);
+  }
+}
