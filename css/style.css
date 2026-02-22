@@ -638,3 +638,16 @@ body.actionsOn .cardActions{
     grid-template-columns: repeat(2, 40px);
   }
 }
+
+/* ===== Spinner animation fix ===== */
+
+.spin{
+  width:18px;
+  height:18px;
+  animation: spin 0.9s linear infinite;
+  transform-origin: 50% 50%;
+}
+
+@keyframes spin{
+  100%{ transform: rotate(360deg); }
+}
