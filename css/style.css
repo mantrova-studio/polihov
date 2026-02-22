@@ -560,3 +560,56 @@ body.actionsOn .cardActions{ display:grid; }
   font-size:13px;
   line-height:1.35;
 }
+
+/* ===== Card action icon buttons colors ===== */
+
+/* базовая иконка в кнопке */
+.cardActions .iconBtn svg{
+  width:18px;
+  height:18px;
+  stroke:white;
+  stroke-width:2;
+  fill:none;
+  opacity:.95;
+}
+
+/* заливки как у .btn.primary / .btn.danger */
+.cardActions .iconBtn.primary{
+  background: rgba(63,91,135,.9);
+  border-color: rgba(63,91,135,.95);
+}
+.cardActions .iconBtn.primary:hover{
+  background: rgba(77,110,160,.95);
+}
+
+.cardActions .iconBtn.danger{
+  background: rgba(163,59,59,.55);
+  border-color: rgba(192,75,75,.7);
+}
+.cardActions .iconBtn.danger:hover{
+  background: rgba(192,75,75,.65);
+  border-color: rgba(192,75,75,.9);
+}
+
+/* чтобы кнопки действий были квадратные и аккуратные */
+.cardActions .iconBtn{
+  width:40px;
+  height:40px;
+  padding:0;
+  border-radius:12px;
+  display:grid;
+  place-items:center;
+}
+
+/* (если хочешь 2x2 строго) */
+.cardActions{
+  display:grid;
+  grid-template-columns: repeat(4, 40px);
+  gap:8px;
+  justify-content:flex-start;
+}
+@media (max-width: 420px){
+  .cardActions{
+    grid-template-columns: repeat(2, 40px);
+  }
+}
