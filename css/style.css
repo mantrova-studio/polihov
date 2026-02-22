@@ -635,7 +635,7 @@ body.actionsOn .cardActions{
 
 @media (max-width: 420px){
   body.actionsOn .cardActions{
-    grid-template-columns: repeat(2, 40px);
+    grid-template-columns: repeat(4, 40px);
   }
 }
 
