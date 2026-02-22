@@ -398,7 +398,7 @@ function ensureToastOnce(){
   document.body.appendChild(wrap);
 }
 
-function toast({ title="Готово", message="", icon="check", timeout=4600 } = {}){
+function toast({ title="Готово", message="", icon="check", timeout=7600 } = {}){
   ensureToastOnce();
   const wrap = document.getElementById("toastWrap");
   if(!wrap) return;
