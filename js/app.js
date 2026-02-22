@@ -553,7 +553,7 @@ function bindTokenModalOnce(){
         title: "Ключ действителен",
         message: "Ключ подходит. Можно сохранять.",
         icon: "check",
-        timeout: 2200
+        timeout: 6200
       });
     }catch(e){
       clearSavedToken();
@@ -972,13 +972,13 @@ saveGithubBtn?.addEventListener("click", async ()=>{
       title: "Сохранено",
       message: "Изменения сохранены. Обновление займёт 10–60 секунд.",
       icon: "check",
-      timeout: 3600
+      timeout: 6600
     });
     setTimeout(()=> setSaveBtnState("default"), 1200);
   }catch(e){
     console.error(e);
     setSaveBtnState("default");
-    toast({ title:"Ошибка", message:"Ошибка сохранения: " + (e?.message || ""), icon:"minus", timeout:5200 });
+    toast({ title:"Ошибка", message:"Ошибка сохранения: " + (e?.message || ""), icon:"minus", timeout:8200 });
   }
 });
 
