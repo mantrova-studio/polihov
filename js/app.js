@@ -1,4 +1,4 @@
-// ====== SETTINGS (GitHub) ======
+// ====== SETTINGS (GitHub) ====== 
 const APP_KEY = "tsc_piggy_v2_cache";
 
 const GITHUB_OWNER = "mantrova-studio";
