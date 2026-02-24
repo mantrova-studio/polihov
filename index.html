@@ -7,6 +7,37 @@
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
+
+<!-- ===== Login (TSC) ===== -->
+<div class="loginWrap" id="loginWrap" aria-hidden="true">
+  <div class="loginModal" role="dialog" aria-modal="true">
+    <div class="loginHead">
+      <div>
+        <div class="loginTitle">Вход</div>
+        <div class="loginSub">Введите пароль, чтобы открыть копилку</div>
+      </div>
+      <button class="iconBtn" id="loginClose" type="button" title="Закрыть">✕</button>
+    </div>
+
+    <div class="loginBody">
+      <label class="fieldLabel" for="loginPass">Пароль</label>
+      <input id="loginPass" class="input" type="password" placeholder="••••••••" autocomplete="off" />
+
+      <label class="checkRow" style="margin-top:10px;">
+        <input id="loginRemember" type="checkbox" checked />
+        <span>Запомнить вход</span>
+      </label>
+
+      <div class="loginErr" id="loginError" style="display:none;"></div>
+
+      <div class="loginActions">
+        <button class="btn" id="loginCancel" type="button">Закрыть</button>
+        <button class="btn primary" id="loginOk" type="button">Войти</button>
+      </div>
+    </div>
+  </div>
+</div>
+
   <header class="topbar">
     <div class="container">
       <div class="headerRow center">
