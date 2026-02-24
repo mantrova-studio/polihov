@@ -5,6 +5,99 @@ const GITHUB_OWNER = "mantrova-studio";
 const GITHUB_REPO  = "polihov";
 const GITHUB_PATH  = "data/piggy.json"; // файл с копилками
 
+// ===== Login gate =====
+const APP_PASSWORD = "1234"; // ← поменяй
+const AUTH_KEY = "tsc_piggy_auth_v1";
+
+// DOM login
+const loginWrap = document.getElementById("loginWrap");
+const loginPass = document.getElementById("loginPass");
+const loginRemember = document.getElementById("loginRemember");
+const loginError = document.getElementById("loginError");
+
+const loginOk = document.getElementById("loginOk");
+const loginCancel = document.getElementById("loginCancel");
+const loginClose = document.getElementById("loginClose");
+
+function isAuthed(){
+  return localStorage.getItem(AUTH_KEY) === "1";
+}
+function setAuthed(ok){
+  if(ok) localStorage.setItem(AUTH_KEY, "1");
+  else localStorage.removeItem(AUTH_KEY);
+}
+
+function openLogin(){
+  document.body.classList.add("locked");
+  loginWrap.classList.add("open");
+  loginWrap.setAttribute("aria-hidden","false");
+  loginError.style.display = "none";
+  loginError.textContent = "";
+  loginPass.value = "";
+  setTimeout(()=>loginPass.focus(), 60);
+}
+
+function closeLogin(){
+  loginWrap.classList.remove("open");
+  loginWrap.setAttribute("aria-hidden","true");
+  document.body.classList.remove("locked");
+}
+
+function showLoginError(msg){
+  loginError.textContent = msg || "Неверный пароль";
+  loginError.style.display = "block";
+}
+
+function requireAuthOrLock(){
+  if(isAuthed()){
+    document.body.classList.remove("locked");
+    return true;
+  }
+  openLogin();
+  return false;
+}
+
+// обработчики
+loginOk?.addEventListener("click", ()=>{
+  const p = (loginPass.value || "").trim();
+  if(p !== APP_PASSWORD){
+    showLoginError("Неверный пароль.");
+    loginPass.select();
+    return;
+  }
+
+  // запомнить вход
+  if(loginRemember?.checked){
+    setAuthed(true);
+  }else{
+    // если НЕ запоминать — можно хранить только в sessionStorage:
+    // sessionStorage.setItem(AUTH_KEY, "1");
+    // и в isAuthed() проверять sessionStorage тоже
+    setAuthed(true); // проще: всё равно запомнит
+  }
+
+  closeLogin();
+  // после входа — перерендер
+  render?.();
+});
+
+loginCancel?.addEventListener("click", ()=>{
+  // остаёмся “закрытым”
+  openLogin();
+});
+
+loginClose?.addEventListener("click", ()=>{
+  openLogin();
+});
+
+loginWrap?.addEventListener("click", (e)=>{
+  if(e.target === loginWrap) openLogin();
+});
+
+loginPass?.addEventListener("keydown", (e)=>{
+  if(e.key === "Enter") loginOk?.click();
+});
+
 // ====== Token storage ======
 const TOKEN_SESSION_KEY = "tsc_piggy_github_token_session_v1";
 const TOKEN_LOCAL_KEY   = "tsc_piggy_github_token_local_v1";
