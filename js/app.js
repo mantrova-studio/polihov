@@ -6,7 +6,7 @@ const GITHUB_REPO  = "polihov";
 const GITHUB_PATH  = "data/piggy.json"; // файл с копилками
 
 // ===== Login gate =====
-const APP_PASSWORD = "1234"; // ← поменяй
+const APP_PASSWORD = "12344321"; // ← поменяй
 const AUTH_KEY = "tsc_piggy_auth_v1";
 
 // DOM login
