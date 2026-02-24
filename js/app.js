@@ -1100,6 +1100,9 @@ orderBtn?.addEventListener("click", ()=>{
   bindTokenModalOnce();
   await autoLoadState();
 
+   // 🔒 блокируем, если не вошёл
+  if(!requireAuthOrLock()) return;
+
   // по умолчанию кнопки скрыты
   setActionsMode(false);
 
