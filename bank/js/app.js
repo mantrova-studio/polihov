@@ -3,7 +3,7 @@ const APP_KEY = "tsc_piggy_v2_cache";
 
 const GITHUB_OWNER = "mantrova-studio";
 const GITHUB_REPO  = "polihov";
-const GITHUB_PATH  = "bank/data/piggy.json"; // файл с копилками
+const GITHUB_PATH  = "/bank/data/piggy.json"; // файл с копилками
 
 // ===== Login gate =====
 const APP_PASSWORD = "12344321"; // ← поменяй
