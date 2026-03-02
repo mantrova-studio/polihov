@@ -1,15 +1,13 @@
 // Vault — мульти-хранилища + локальное шифрование + сохранение в GitHub (по кнопке)
-// В настройках вводится ТОЛЬКО token. Репозиторий/пути — из "файла настроек" ниже.
+// В настройках вводится ТОЛЬКО token. Репозиторий/пути — из "FILE SETTINGS" ниже.
 
 const qs = (s, el = document) => el.querySelector(s);
 
 // ===== FILE SETTINGS (правишь тут один раз под репозиторий) =====
-// ВАЖНО: repo должен быть реальным. По умолчанию поставил твой org и repo "polihov".
 const GH_FILE = {
   owner: "mantrova-studio",
   repo: "polihov",
   branch: "main",
-  // куда писать файлы хранилищ в репозитории:
   baseDir: "notes/data/vaults"
 };
 // ===============================================================
@@ -36,13 +34,16 @@ const emptyState = qs("#emptyState");
 const editForm = qs("#editForm");
 const titleInput = qs("#titleInput");
 const typeInput = qs("#typeInput");
-const bodyInput = qs("#bodyInput");
+const bodyInput = qs("#bodyInput"); // contenteditable div
 const delBtn = qs("#delBtn");
 const copyBtn = qs("#copyBtn");
 const saveGithubBtn = qs("#saveGithubBtn");
 const statusLine = qs("#statusLine");
 const typeHints = qs("#typeHints");
 const typeFilterDDRoot = qs("#typeFilterDD");
+
+// format menu
+const fmtMenu = qs("#fmtMenu");
 
 // toast + modal
 const toastEl = qs("#toast");
@@ -53,10 +54,10 @@ const modalFootEl = qs("#modalFoot");
 
 // ---------- LocalStorage keys ----------
 const LS = {
-  VAULTS: "vaults_index_v1",         // [{id,name,createdAt,updatedAt}]
-  ACTIVE: "vault_active_v1",         // active vault id
-  REMEMBER: "vault_remember_v1",     // "1" remember selected vault
-  GH_TOKEN: "vault_github_token_v1", // token only
+  VAULTS: "vaults_index_v1",
+  ACTIVE: "vault_active_v1",
+  REMEMBER: "vault_remember_v1",
+  GH_TOKEN: "vault_github_token_v1",
 };
 
 const blobKey = (id) => `vault_blob_${id}`;
@@ -83,6 +84,7 @@ function setLocked(locked){
   document.body.classList.toggle("is-locked", locked);
   qs("#topbar").setAttribute("aria-hidden", locked ? "true" : "false");
   qs("#appRoot").setAttribute("aria-hidden", locked ? "true" : "false");
+  hideFmtMenu();
 }
 
 function setStatus(msg){
@@ -112,6 +114,10 @@ function escapeHtml(s){
     .replaceAll(">","&gt;")
     .replaceAll('"',"&quot;")
     .replaceAll("'","&#039;");
+}
+
+function stripHtml(html){
+  return String(html || "").replace(/<[^>]+>/g, " ");
 }
 
 // ---------- Modal ----------
@@ -332,7 +338,13 @@ async function saveVaultDataLocal(){
   if (!blob?.salt) throw new Error("vault not initialized");
 
   const salt = bytesFromB64(blob.salt);
-  const { iv, cipher } = await encryptJson(state.key, { items: state.items });
+
+  const safeItems = state.items.map(x => ({
+    ...x,
+    bodyHtml: sanitizeHtml(x.bodyHtml || "")
+  }));
+
+  const { iv, cipher } = await encryptJson(state.key, { items: safeItems });
 
   const next = { v: 1, salt: b64FromBytes(salt), iv: b64FromBytes(iv), data: b64FromBytes(cipher) };
   saveBlob(vaultId, next);
@@ -387,11 +399,12 @@ function renderList(){
 
   let items = [...state.items].sort((a,b) => (b.updatedAt||"").localeCompare(a.updatedAt||""));
   if (ft !== "all") items = items.filter(x => (x.type || "").trim() === ft);
-  if (q) items = items.filter(x =>
-    (x.title || "").toLowerCase().includes(q) ||
-    (x.body || "").toLowerCase().includes(q) ||
-    ((x.type || "").toLowerCase().includes(q))
-  );
+  if (q) items = items.filter(x => {
+    const bodyText = stripHtml(x.bodyHtml || "");
+    return (x.title || "").toLowerCase().includes(q) ||
+      bodyText.toLowerCase().includes(q) ||
+      ((x.type || "").toLowerCase().includes(q));
+  });
 
   listEl.innerHTML = "";
   emptyState.hidden = items.length > 0;
@@ -420,14 +433,14 @@ function renderEditor(){
   if (!it){
     titleInput.value = "";
     typeInput.value = "";
-    bodyInput.value = "";
+    bodyInput.innerHTML = "";
     delBtn.disabled = true;
     copyBtn.disabled = true;
     return;
   }
   titleInput.value = it.title || "";
   typeInput.value = it.type || "";
-  bodyInput.value = it.body || "";
+  bodyInput.innerHTML = it.bodyHtml || "";
   delBtn.disabled = false;
   copyBtn.disabled = false;
 }
@@ -496,11 +509,9 @@ function openCreateVaultModal(){
       <button class="btn btn--primary" id="cvOk">Создать</button>
     `,
     onMount: () => {
-      const wireEye = (btn, inp) => {
-        btn.addEventListener("click", () => {
-          inp.type = (inp.type === "password") ? "text" : "password";
-        });
-      };
+      const wireEye = (btn, inp) => btn.addEventListener("click", () => {
+        inp.type = (inp.type === "password") ? "text" : "password";
+      });
       wireEye(qs("#cvToggle1"), qs("#cvPass"));
       wireEye(qs("#cvToggle2"), qs("#cvPass2"));
 
@@ -585,7 +596,7 @@ function openSettingsModal(){
 
           <div class="hint" style="margin-top:10px">
             <span class="dot"></span>
-            Удаление необратимо (локально). На GitHub файлы останутся, если ты их не удалишь вручную.
+            Удаление необратимо (локально). На GitHub файлы останутся.
           </div>
         </div>
       </div>
@@ -617,7 +628,7 @@ function openSettingsModal(){
 
         activeVaultTitle.textContent = newName;
         activeVaultSub.textContent = `ID: ${state.vaultId}`;
-        renderVaultSelectDropdown(); // чтобы на входе тоже обновилось
+        renderVaultSelectDropdown();
 
         toast("Переименовано");
       });
@@ -635,12 +646,10 @@ function openSettingsModal(){
         });
         if (!ok) return;
 
-        // удалить blob + запись из реестра
         localStorage.removeItem(blobKey(cur.id));
         const next = vaults2.filter(x => x.id !== cur.id);
         saveVaults(next);
 
-        // выбрать другое в lock screen
         selectedVaultId = next[0]?.id || null;
         if (getActiveVaultId() === cur.id) setActiveVaultId(selectedVaultId || "");
 
@@ -652,7 +661,7 @@ function openSettingsModal(){
   });
 }
 
-// ---------- GitHub save (button "Сохранить") ----------
+// ---------- GitHub save ----------
 function ghApiHeaders(token){
   return {
     "Accept": "application/vnd.github+json",
@@ -704,7 +713,6 @@ async function githubSaveCurrentVault(){
 
   setStatus("GitHub: сохранение…");
 
-  // сначала локально применим (чтобы blob был актуальный)
   const blob = await saveVaultDataLocal();
 
   const path = ghPathForVault(state.vaultId);
@@ -733,7 +741,12 @@ async function unlockSelectedVault(password){
   state.unlocked = true;
   state.vaultId = selectedVaultId;
   state.key = key;
-  state.items = Array.isArray(payload.items) ? payload.items : [];
+
+  state.items = Array.isArray(payload.items) ? payload.items.map(x => ({
+    ...x,
+    bodyHtml: sanitizeHtml(x.bodyHtml || "")
+  })) : [];
+
   state.activeId = state.items[0]?.id ?? null;
   state.filterType = "all";
 
@@ -783,7 +796,7 @@ newBtn.addEventListener("click", () => {
     id: nid(),
     title: "Новая запись",
     type: "Заметки",
-    body: "",
+    bodyHtml: "",
     createdAt: nowISO(),
     updatedAt: nowISO()
   };
@@ -803,7 +816,7 @@ editForm.addEventListener("submit", async (e) => {
 
   it.title = (titleInput.value || "").trim() || "Без названия";
   it.type  = (typeInput.value || "").trim() || "Без типа";
-  it.body  = bodyInput.value || "";
+  it.bodyHtml = sanitizeHtml(bodyInput.innerHTML || "");
   it.updatedAt = nowISO();
 
   try{
@@ -818,12 +831,11 @@ editForm.addEventListener("submit", async (e) => {
 
 saveGithubBtn.addEventListener("click", async () => {
   try{
-    // чтобы не забывать применить изменения — сначала синхронизируем поля в item
     const it = state.items.find(x => x.id === state.activeId);
     if (it){
       it.title = (titleInput.value || "").trim() || "Без названия";
       it.type  = (typeInput.value || "").trim() || "Без типа";
-      it.body  = bodyInput.value || "";
+      it.bodyHtml = sanitizeHtml(bodyInput.innerHTML || "");
       it.updatedAt = nowISO();
     }
     await githubSaveCurrentVault();
@@ -865,13 +877,196 @@ copyBtn.addEventListener("click", async () => {
   const it = state.items.find(x => x.id === state.activeId);
   if (!it) return;
 
-  const text = `${it.title}\nТип: ${it.type}\n\n${it.body || ""}`;
+  const text = `${it.title}\nТип: ${it.type}\n\n${stripHtml(it.bodyHtml || "")}`;
   try{
     await navigator.clipboard.writeText(text);
     toast("Скопировано");
   }catch{
     toast("Не удалось скопировать");
   }
+});
+
+// ---------- Rich text: sanitizer ----------
+function sanitizeHtml(html){
+  const allowed = new Set(["B","STRONG","I","EM","U","S","STRIKE","BR","DIV","P","SPAN"]);
+  const doc = new DOMParser().parseFromString(`<div>${html}</div>`, "text/html");
+  const root = doc.body.firstElementChild;
+
+  const walk = (node) => {
+    const children = [...node.childNodes];
+    for (const ch of children){
+      if (ch.nodeType === Node.ELEMENT_NODE){
+        const tag = ch.tagName.toUpperCase();
+
+        // remove all attrs
+        const keepSpoiler = (tag === "SPAN") && (ch.getAttribute("class") || "").includes("spoiler");
+        [...ch.attributes].forEach(a => ch.removeAttribute(a.name));
+        if (keepSpoiler) ch.setAttribute("class", "spoiler");
+
+        if (!allowed.has(tag)){
+          const frag = doc.createDocumentFragment();
+          while (ch.firstChild) frag.appendChild(ch.firstChild);
+          ch.replaceWith(frag);
+          continue;
+        }
+
+        // span only spoiler
+        if (tag === "SPAN" && !keepSpoiler){
+          const frag = doc.createDocumentFragment();
+          while (ch.firstChild) frag.appendChild(ch.firstChild);
+          ch.replaceWith(frag);
+          continue;
+        }
+
+        walk(ch);
+      } else if (ch.nodeType === Node.COMMENT_NODE){
+        ch.remove();
+      }
+    }
+  };
+
+  walk(root);
+  return root.innerHTML;
+}
+
+// ---------- Rich text: Telegram-like format menu ----------
+function selectionInEditor(){
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return false;
+  const range = sel.getRangeAt(0);
+  const common = range.commonAncestorContainer;
+  return bodyInput.contains(common.nodeType === 1 ? common : common.parentElement);
+}
+
+function hasSelection(){
+  const sel = window.getSelection();
+  return sel && sel.rangeCount && !sel.getRangeAt(0).collapsed;
+}
+
+function getSelectionRect(){
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return null;
+  const r = sel.getRangeAt(0).getBoundingClientRect();
+  if (!r || (r.width === 0 && r.height === 0)) return null;
+  return r;
+}
+
+function showFmtMenuNearSelection(){
+  if (!selectionInEditor() || !hasSelection()) return;
+  const rect = getSelectionRect();
+  if (!rect) return;
+
+  fmtMenu.hidden = false;
+
+  const x = Math.min(window.innerWidth - 10, Math.max(10, rect.left + rect.width/2));
+  const y = Math.max(10, rect.top - 52);
+
+  fmtMenu.style.left = `${x}px`;
+  fmtMenu.style.top = `${y}px`;
+  fmtMenu.style.transform = "translateX(-50%)";
+}
+
+function hideFmtMenu(){
+  fmtMenu.hidden = true;
+}
+
+function wrapSelectionWithSpoiler(){
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return;
+  const range = sel.getRangeAt(0);
+  if (range.collapsed) return;
+
+  const span = document.createElement("span");
+  span.className = "spoiler";
+  try{
+    range.surroundContents(span);
+  }catch{
+    const frag = range.extractContents();
+    span.appendChild(frag);
+    range.insertNode(span);
+  }
+
+  sel.removeAllRanges();
+  const nr = document.createRange();
+  nr.selectNodeContents(span);
+  sel.addRange(nr);
+}
+
+function resetFormatting(){
+  document.execCommand("removeFormat");
+
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return;
+  const range = sel.getRangeAt(0);
+
+  const container = range.commonAncestorContainer.nodeType === 1
+    ? range.commonAncestorContainer
+    : range.commonAncestorContainer.parentElement;
+
+  if (!container) return;
+
+  const spoilers = [...container.querySelectorAll("span.spoiler")];
+  for (const sp of spoilers){
+    try{
+      if (range.intersectsNode(sp)){
+        const frag = document.createDocumentFragment();
+        while (sp.firstChild) frag.appendChild(sp.firstChild);
+        sp.replaceWith(frag);
+      }
+    }catch{}
+  }
+}
+
+fmtMenu.addEventListener("click", (e) => {
+  const btn = e.target.closest(".fmt__btn");
+  if (!btn) return;
+  const cmd = btn.dataset.cmd;
+  if (!selectionInEditor()) return;
+
+  if (cmd === "spoiler"){
+    wrapSelectionWithSpoiler();
+    hideFmtMenu();
+    bodyInput.focus();
+    return;
+  }
+  if (cmd === "reset"){
+    resetFormatting();
+    hideFmtMenu();
+    bodyInput.focus();
+    return;
+  }
+
+  document.execCommand(cmd);
+  hideFmtMenu();
+  bodyInput.focus();
+});
+
+// ПК: правый клик
+bodyInput.addEventListener("contextmenu", (e) => {
+  if (!hasSelection()) return;
+  e.preventDefault();
+  showFmtMenuNearSelection();
+});
+
+// мобилка/ПК: когда выделение меняется
+document.addEventListener("selectionchange", () => {
+  if (selectionInEditor() && hasSelection()){
+    showFmtMenuNearSelection();
+  } else {
+    hideFmtMenu();
+  }
+});
+
+// клик вне — закрыть
+document.addEventListener("mousedown", (e) => {
+  if (!fmtMenu.hidden && !fmtMenu.contains(e.target)) hideFmtMenu();
+});
+
+// раскрытие спойлера
+bodyInput.addEventListener("click", (e) => {
+  const sp = e.target.closest(".spoiler");
+  if (!sp) return;
+  sp.classList.toggle("is-revealed");
 });
 
 // ---------- Boot ----------
