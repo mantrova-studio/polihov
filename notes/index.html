@@ -10,14 +10,14 @@
 <body class="is-locked">
   <div class="bg"></div>
 
-  <!-- LOCK SCREEN: до пароля виден только он -->
+  <!-- LOCK SCREEN -->
   <section class="lock" id="lockScreen" aria-hidden="false">
     <div class="lock__card">
       <div class="brand brand--center">
         <div class="brand__dot"></div>
         <div class="brand__text">
           <div class="brand__title">Vault</div>
-          <div class="brand__sub">мульти-хранилища · шифрование · GitHub sync</div>
+          <div class="brand__sub">мульти-хранилища · шифрование</div>
         </div>
       </div>
 
@@ -32,8 +32,6 @@
             <span class="field__label">Действия</span>
             <div class="row">
               <button class="btn btn--ghost" id="createVaultBtn" type="button">Создать</button>
-              <button class="btn btn--ghost" id="renameVaultBtn" type="button">Переименовать</button>
-              <button class="btn btn--danger" id="deleteVaultBtn" type="button" title="Удалить выбранное">Удалить</button>
             </div>
           </div>
         </div>
@@ -57,13 +55,13 @@
 
         <div class="hint">
           <span class="dot"></span>
-          Пароль не хранится. Если забудешь пароль — данные этого хранилища не восстановить.
+          Пароль не хранится. Если забудешь — восстановить данные невозможно.
         </div>
       </form>
     </div>
   </section>
 
-  <!-- APP (скрыт пока locked) -->
+  <!-- APP -->
   <header class="topbar" id="topbar" aria-hidden="true">
     <div class="wrap topbar__inner">
       <div class="brand">
@@ -75,7 +73,7 @@
       </div>
 
       <div class="topbar__actions">
-        <button class="btn btn--ghost" id="syncBtn" type="button">GitHub</button>
+        <button class="btn btn--ghost" id="settingsBtn" type="button">Настройки</button>
         <button class="btn btn--ghost" id="lockBtn" type="button">Выйти</button>
       </div>
     </div>
@@ -133,21 +131,12 @@
           </label>
 
           <div class="row">
-            <button class="btn btn--primary" id="saveBtn" type="submit">Сохранить</button>
-            <button class="btn btn--ghost" id="exportBtn" type="button">Экспорт</button>
-            <label class="btn btn--ghost fileBtn">
-              Импорт
-              <input id="importFile" type="file" accept="application/json" hidden />
-            </label>
+            <button class="btn btn--primary" id="applyBtn" type="submit">Применить</button>
+            <button class="btn btn--ghost" id="saveGithubBtn" type="button">Сохранить</button>
             <div class="spacer"></div>
             <span class="muted" id="statusLine"></span>
           </div>
         </form>
-
-        <div class="hint">
-          <span class="dot"></span>
-          Каждое хранилище — отдельный зашифрованный blob. GitHub sync пишет отдельный файл.
-        </div>
       </section>
     </section>
 
