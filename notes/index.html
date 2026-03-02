@@ -127,7 +127,8 @@
 
           <label class="field">
             <span class="field__label">Текст</span>
-            <textarea class="textarea" id="bodyInput" rows="12" placeholder="Логины, пароли, ссылки, чек-листы…"></textarea>
+            <div class="rtx" id="bodyInput" contenteditable="true" spellcheck="false"
+                 data-placeholder="Логины, пароли, ссылки, чек-листы…"></div>
           </label>
 
           <div class="row">
@@ -149,6 +150,16 @@
   </main>
 
   <div class="toast" id="toast" hidden></div>
+
+  <!-- Floating format menu -->
+  <div class="fmt" id="fmtMenu" hidden>
+    <button class="fmt__btn" data-cmd="bold" title="Жирный"><b>B</b></button>
+    <button class="fmt__btn" data-cmd="italic" title="Курсив"><i>I</i></button>
+    <button class="fmt__btn" data-cmd="underline" title="Подчеркнуть"><u>U</u></button>
+    <button class="fmt__btn" data-cmd="strikeThrough" title="Зачеркнуть"><s>S</s></button>
+    <button class="fmt__btn" data-cmd="spoiler" title="Скрытый (спойлер)">▧</button>
+    <button class="fmt__btn fmt__btn--ghost" data-cmd="reset" title="Обычный">Aa</button>
+  </div>
 
   <!-- MODAL -->
   <div class="modal" id="modal" hidden aria-hidden="true">
