@@ -927,7 +927,7 @@ function sanitizeHtml(html){
   return root.innerHTML;
 }
 
-// ---------- Rich text: context menu ----------
+// ---------- Rich text: context menu (fixed hide + clamp to screen) ----------
 function selectionInEditor(){
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return false;
@@ -959,18 +959,37 @@ function setFmtExtraVisible(visible){
   });
 }
 
+function clamp(n, a, b){
+  return Math.max(a, Math.min(b, n));
+}
+
+function positionFmtMenu(centerX, topY){
+  // делаем видимым, чтобы измерить ширину
+  const margin = 8;
+  const desiredY = topY - 44 - 12; // выше текста
+
+  // временно ставим грубо, потом уточним по width/height
+  fmtMenu.style.left = `${centerX}px`;
+  fmtMenu.style.top = `${Math.max(10, desiredY)}px`;
+  fmtMenu.style.transform = "none";
+
+  // после отрисовки — измеряем и поджимаем в экран
+  requestAnimationFrame(() => {
+    if (fmtMenu.hidden) return;
+    const r = fmtMenu.getBoundingClientRect();
+
+    const left = clamp(centerX - r.width / 2, margin, window.innerWidth - r.width - margin);
+    const top = clamp(desiredY, margin, window.innerHeight - r.height - margin);
+
+    fmtMenu.style.left = `${left}px`;
+    fmtMenu.style.top = `${top}px`;
+  });
+}
+
 function showFmtMenuAt(x, y, showFormatting){
   setFmtExtraVisible(showFormatting);
   fmtMenu.hidden = false;
-
-  // чуть выше
-  const menuH = 44;
-  const yy = Math.max(10, y - menuH - 12);
-  const xx = Math.min(window.innerWidth - 10, Math.max(10, x));
-
-  fmtMenu.style.left = `${xx}px`;
-  fmtMenu.style.top = `${yy}px`;
-  fmtMenu.style.transform = "translateX(-50%)";
+  positionFmtMenu(x, y);
 }
 
 function showFmtMenuNearSelection(){
@@ -988,8 +1007,6 @@ async function cmdCopy(){
       toast("Скопировано");
       return;
     }
-
-    // если выделения нет — копируем всю заметку (plain text)
     const it = state.items.find(x => x.id === state.activeId);
     const all = it ? stripHtml(it.bodyHtml || "") : stripHtml(bodyInput.innerHTML || "");
     await navigator.clipboard.writeText(all);
@@ -1030,10 +1047,8 @@ function wrapSelectionWithSpoiler(){
   const range = sel.getRangeAt(0);
   if (range.collapsed) return;
 
-  // убрать слои спойлера внутри выделения
   unwrapSpoilersInRange(range.cloneRange());
 
-  // range может стать неактуальным — возьмём заново
   const sel2 = window.getSelection();
   if (!sel2 || sel2.rangeCount === 0) return;
   const range2 = sel2.getRangeAt(0);
@@ -1085,7 +1100,6 @@ fmtMenu.addEventListener("click", async (e) => {
     return;
   }
 
-  // форматирование только при выделении внутри редактора
   if (!selectionInEditor() || !hasSelection()) return;
 
   if (cmd === "spoiler"){
@@ -1114,12 +1128,21 @@ bodyInput.addEventListener("contextmenu", (e) => {
   if (hasSel){
     showFmtMenuNearSelection();
   }else{
-    // меню в точке клика, без форматирования
     showFmtMenuAt(e.clientX, e.clientY, false);
   }
 });
 
-// selectionchange: показываем только при выделении, иначе скрываем
+// ✅ ГЛАВНЫЙ ФИКС: при любом клике/тапе/скролле/ресайзе — меню закрывается
+document.addEventListener("pointerdown", (e) => {
+  if (fmtMenu.hidden) return;
+  if (fmtMenu.contains(e.target)) return; // клик по меню — не закрываем
+  hideFmtMenu();
+}, true);
+
+document.addEventListener("scroll", () => hideFmtMenu(), true);
+window.addEventListener("resize", () => hideFmtMenu());
+
+// selectionchange: если выделение пропало — скрыть
 document.addEventListener("selectionchange", () => {
   if (selectionInEditor() && hasSelection()){
     showFmtMenuNearSelection();
@@ -1128,11 +1151,9 @@ document.addEventListener("selectionchange", () => {
   }
 });
 
-// клик/тап вне — закрыть меню
-document.addEventListener("pointerdown", (e) => {
-  if (fmtMenu.hidden) return;
-  if (fmtMenu.contains(e.target)) return;
-  hideFmtMenu();
+// клик в редактор без выделения — тоже закрыть (на всякий)
+bodyInput.addEventListener("pointerup", () => {
+  if (!hasSelection()) hideFmtMenu();
 });
 
 // раскрытие спойлера
