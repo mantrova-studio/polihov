@@ -14,10 +14,10 @@
   <section class="lock" id="lockScreen" aria-hidden="false">
     <div class="lock__card">
       <div class="brand brand--center">
-        
+        <div class="brand__dot"></div>
         <div class="brand__text">
-          <div class="brand__title">ХРАНИЛИЩЕ <div class="brand__dot"></div> NOTES</div>
-          <div class="brand__sub"></div>
+          <div class="brand__title">Vault</div>
+          <div class="brand__sub">мульти-хранилища · шифрование</div>
         </div>
       </div>
 
@@ -151,14 +151,18 @@
 
   <div class="toast" id="toast" hidden></div>
 
-  <!-- Floating format menu -->
+  <!-- Floating menu -->
   <div class="fmt" id="fmtMenu" hidden>
-    <button class="fmt__btn" data-cmd="bold" title="Жирный"><b>B</b></button>
-    <button class="fmt__btn" data-cmd="italic" title="Курсив"><i>I</i></button>
-    <button class="fmt__btn" data-cmd="underline" title="Подчеркнуть"><u>U</u></button>
-    <button class="fmt__btn" data-cmd="strikeThrough" title="Зачеркнуть"><s>S</s></button>
-    <button class="fmt__btn" data-cmd="spoiler" title="Скрытый (спойлер)">▧</button>
-    <button class="fmt__btn fmt__btn--ghost" data-cmd="reset" title="Обычный">Aa</button>
+    <button class="fmt__btn" data-cmd="copy" title="Копировать">⎘</button>
+    <button class="fmt__btn" data-cmd="paste" title="Вставить">⎀</button>
+    <span class="fmt__sep" data-role="fmt-extra"></span>
+
+    <button class="fmt__btn" data-role="fmt-extra" data-cmd="bold" title="Жирный"><b>B</b></button>
+    <button class="fmt__btn" data-role="fmt-extra" data-cmd="italic" title="Курсив"><i>I</i></button>
+    <button class="fmt__btn" data-role="fmt-extra" data-cmd="underline" title="Подчеркнуть"><u>U</u></button>
+    <button class="fmt__btn" data-role="fmt-extra" data-cmd="strikeThrough" title="Зачеркнуть"><s>S</s></button>
+    <button class="fmt__btn" data-role="fmt-extra" data-cmd="spoiler" title="Скрытый (спойлер)">▧</button>
+    <button class="fmt__btn fmt__btn--ghost" data-role="fmt-extra" data-cmd="reset" title="Обычный">Aa</button>
   </div>
 
   <!-- MODAL -->
