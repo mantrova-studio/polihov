@@ -10,18 +10,33 @@
 <body class="is-locked">
   <div class="bg"></div>
 
-  <!-- LOCK SCREEN (единственное, что видно до ввода пароля) -->
+  <!-- LOCK SCREEN: до пароля виден только он -->
   <section class="lock" id="lockScreen" aria-hidden="false">
     <div class="lock__card">
       <div class="brand brand--center">
         <div class="brand__dot"></div>
         <div class="brand__text">
           <div class="brand__title">Vault</div>
-          <div class="brand__sub">зашифрованные заметки · пароли · данные</div>
+          <div class="brand__sub">мульти-хранилища · шифрование · GitHub sync</div>
         </div>
       </div>
 
       <form class="form" id="loginForm" autocomplete="on">
+        <div class="row row--2">
+          <div class="field">
+            <span class="field__label">Хранилище</span>
+            <div class="dd" id="vaultSelectDD"></div>
+          </div>
+
+          <div class="field">
+            <span class="field__label">Действия</span>
+            <div class="row">
+              <button class="btn btn--ghost" id="createVaultBtn" type="button">Создать</button>
+              <button class="btn btn--danger" id="deleteVaultBtn" type="button" title="Удалить выбранное">Удалить</button>
+            </div>
+          </div>
+        </div>
+
         <label class="field">
           <span class="field__label">Пароль</span>
           <input class="input" id="passwordInput" type="password" placeholder="Введите пароль" required />
@@ -29,30 +44,29 @@
 
         <label class="check">
           <input type="checkbox" id="rememberCheck" />
-          <span>Запомнить вход на этом устройстве</span>
+          <span>Запомнить выбранное хранилище на устройстве</span>
         </label>
 
         <div class="row">
           <button class="btn btn--primary" type="submit">Войти</button>
-          <button class="btn btn--ghost" id="initBtn" type="button">Новое хранилище</button>
         </div>
 
         <div class="hint">
           <span class="dot"></span>
-          Пароль не хранится. Если забудешь — восстановить данные нельзя.
+          Пароль не хранится. Если забудешь пароль — данные этого хранилища не восстановить.
         </div>
       </form>
     </div>
   </section>
 
-  <!-- APP (до входа полностью скрыто через body.is-locked) -->
+  <!-- APP (скрыт пока locked) -->
   <header class="topbar" id="topbar" aria-hidden="true">
     <div class="wrap topbar__inner">
       <div class="brand">
         <div class="brand__dot"></div>
         <div class="brand__text">
-          <div class="brand__title">Vault</div>
-          <div class="brand__sub">local · encrypted · sync optional</div>
+          <div class="brand__title" id="activeVaultTitle">Vault</div>
+          <div class="brand__sub" id="activeVaultSub">—</div>
         </div>
       </div>
 
@@ -68,15 +82,12 @@
       <section class="card">
         <div class="card__head">
           <h2 class="h2">Записи</h2>
-          <p class="muted">Тип записи — любое название. Примеры: “Пароли”, “Сервера”, “Клиенты”, “Идеи”.</p>
+          <p class="muted">Тип записи — любое название (“Пароли”, “Клиенты”, “Сервера”…).</p>
         </div>
 
         <div class="toolbar">
           <input class="input" id="searchInput" type="text" placeholder="Поиск…" />
-
-          <!-- STYLED DROPDOWN -->
           <div class="dd" id="typeFilterDD"></div>
-
           <button class="btn btn--primary" id="newBtn" type="button">+ Новая</button>
         </div>
 
@@ -99,7 +110,6 @@
           <div class="row row--2">
             <label class="field">
               <span class="field__label">Тип (свой)</span>
-              <!-- свободный ввод + подсказки -->
               <input class="input" id="typeInput" type="text" placeholder="Например: Пароли" list="typeHints" />
               <datalist id="typeHints"></datalist>
             </label>
@@ -115,7 +125,7 @@
 
           <label class="field">
             <span class="field__label">Текст</span>
-            <textarea class="textarea" id="bodyInput" rows="12" placeholder="Можно хранить логины, пароли, ссылки, чек-листы…"></textarea>
+            <textarea class="textarea" id="bodyInput" rows="12" placeholder="Логины, пароли, ссылки, чек-листы…"></textarea>
           </label>
 
           <div class="row">
@@ -128,12 +138,12 @@
             <div class="spacer"></div>
             <span class="muted" id="statusLine"></span>
           </div>
-
-          <div class="hint">
-            <span class="dot"></span>
-            Локально хранится зашифрованный “blob”. GitHub — опциональная синхронизация (тоже зашифровано).
-          </div>
         </form>
+
+        <div class="hint">
+          <span class="dot"></span>
+          Каждое хранилище — отдельный зашифрованный blob. GitHub sync пишет отдельный файл.
+        </div>
       </section>
     </section>
 
@@ -145,7 +155,6 @@
     </footer>
   </main>
 
-  <!-- TOAST -->
   <div class="toast" id="toast" hidden></div>
 
   <!-- MODAL -->
