@@ -1,19 +1,23 @@
-// Vault — local encrypted notes + optional GitHub sync (still encrypted)
-// Формат GitHub файла: тот же blob, что в localStorage: {v,salt,iv,data}
+// Vault — мульти-хранилища (каждое отдельно) + шифрование + GitHub sync (отдельный файл на vault)
 
 const qs = (s, el = document) => el.querySelector(s);
 
+// lock UI
 const loginForm = qs("#loginForm");
 const passwordInput = qs("#passwordInput");
 const rememberCheck = qs("#rememberCheck");
-const initBtn = qs("#initBtn");
+const vaultSelectDDRoot = qs("#vaultSelectDD");
+const createVaultBtn = qs("#createVaultBtn");
+const deleteVaultBtn = qs("#deleteVaultBtn");
 
+// app UI
 const lockBtn = qs("#lockBtn");
 const syncBtn = qs("#syncBtn");
+const activeVaultTitle = qs("#activeVaultTitle");
+const activeVaultSub = qs("#activeVaultSub");
 
 const searchInput = qs("#searchInput");
 const newBtn = qs("#newBtn");
-
 const listEl = qs("#list");
 const emptyState = qs("#emptyState");
 
@@ -26,31 +30,38 @@ const copyBtn = qs("#copyBtn");
 const exportBtn = qs("#exportBtn");
 const importFile = qs("#importFile");
 const statusLine = qs("#statusLine");
-
 const typeHints = qs("#typeHints");
 const typeFilterDDRoot = qs("#typeFilterDD");
 
+// toast + modal
 const toastEl = qs("#toast");
 const modalEl = qs("#modal");
 const modalTitleEl = qs("#modalTitle");
 const modalBodyEl = qs("#modalBody");
 const modalFootEl = qs("#modalFoot");
 
+// ---------- LocalStorage keys ----------
 const LS = {
-  VAULT: "vault_blob_v1",
-  SESSION: "vault_session_v1",
-  GH: "vault_github_v1" // {token, owner, repo, branch, path}
+  VAULTS: "vaults_index_v1",         // [{id,name,createdAt,updatedAt}]
+  ACTIVE: "vault_active_v1",         // active vault id (for convenience)
+  REMEMBER: "vault_remember_v1",     // "1" remember selected vault
+  GH: "vault_github_cfg_v1",         // {token, owner, repo, branch, baseDir}
+  // each vault blob: vault_blob_<id>
 };
 
+const blobKey = (id) => `vault_blob_${id}`;
+
+// ---------- State ----------
 let state = {
   unlocked: false,
+  vaultId: null,
   key: null,
   items: [],
   activeId: null,
   filterType: "all"
 };
 
-// ---------------- UI helpers ----------------
+// ---------- UI helpers ----------
 function toast(msg){
   toastEl.textContent = msg;
   toastEl.hidden = false;
@@ -64,6 +75,12 @@ function setLocked(locked){
   qs("#appRoot").setAttribute("aria-hidden", locked ? "true" : "false");
 }
 
+function setStatus(msg){
+  statusLine.textContent = msg || "";
+}
+
+function nowISO(){ return new Date().toISOString(); }
+
 function fmtDate(iso){
   try{
     const d = new Date(iso);
@@ -71,9 +88,11 @@ function fmtDate(iso){
   }catch{ return ""; }
 }
 
-function nowISO(){ return new Date().toISOString(); }
-
 function uid(){
+  return "v_" + Math.random().toString(16).slice(2) + Date.now().toString(16);
+}
+
+function nid(){
   return "n_" + Math.random().toString(16).slice(2) + Date.now().toString(16);
 }
 
@@ -86,7 +105,7 @@ function escapeHtml(s){
     .replaceAll("'","&#039;");
 }
 
-// ---------------- Styled modal ----------------
+// ---------- Modal ----------
 function openModal({title, bodyHTML, footHTML, onMount}){
   modalTitleEl.textContent = title || "Окно";
   modalBodyEl.innerHTML = bodyHTML || "";
@@ -111,7 +130,24 @@ function closeModal(){
   modalEl._closer = null;
 }
 
-// ---------------- Styled dropdown ----------------
+function confirmModal({title, text, okText="Ок", cancelText="Отмена", danger=false}){
+  return new Promise((resolve) => {
+    openModal({
+      title,
+      bodyHTML: `<div class="muted" style="line-height:1.5">${escapeHtml(text)}</div>`,
+      footHTML: `
+        <button class="btn btn--ghost" data-close="1" id="mCancel">${escapeHtml(cancelText)}</button>
+        <button class="btn ${danger ? "btn--danger" : "btn--primary"}" id="mOk">${escapeHtml(okText)}</button>
+      `,
+      onMount: () => {
+        qs("#mCancel").addEventListener("click", () => resolve(false));
+        qs("#mOk").addEventListener("click", () => { closeModal(); resolve(true); });
+      }
+    });
+  });
+}
+
+// ---------- Styled dropdown ----------
 function mountDropdown(rootEl, { getLabel, getItems, getValue, setValue }){
   rootEl.innerHTML = `
     <button class="dd__btn" type="button">
@@ -128,7 +164,6 @@ function mountDropdown(rootEl, { getLabel, getItems, getValue, setValue }){
   function render(){
     label.textContent = getLabel(getValue());
     const items = getItems();
-
     menu.innerHTML = items.map(it => `
       <div class="dd__item ${it.value === getValue() ? "is-active" : ""}" data-value="${escapeHtml(it.value)}">
         ${escapeHtml(it.label)}
@@ -140,12 +175,8 @@ function mountDropdown(rootEl, { getLabel, getItems, getValue, setValue }){
     render();
     menu.hidden = false;
 
-    const onDoc = (e) => {
-      if (!rootEl.contains(e.target)) close();
-    };
-    const onKey = (e) => {
-      if (e.key === "Escape") close();
-    };
+    const onDoc = (e) => { if (!rootEl.contains(e.target)) close(); };
+    const onKey = (e) => { if (e.key === "Escape") close(); };
 
     document.addEventListener("mousedown", onDoc);
     document.addEventListener("keydown", onKey);
@@ -161,24 +192,19 @@ function mountDropdown(rootEl, { getLabel, getItems, getValue, setValue }){
     rootEl._onKey = null;
   }
 
-  btn.addEventListener("click", () => {
-    if (menu.hidden) open();
-    else close();
-  });
-
+  btn.addEventListener("click", () => (menu.hidden ? open() : close()));
   menu.addEventListener("click", (e) => {
     const it = e.target.closest(".dd__item");
     if (!it) return;
     setValue(it.dataset.value);
     close();
-    renderList();
+    render();
   });
 
-  // initial
   render();
 }
 
-// ---------------- Crypto helpers ----------------
+// ---------- Crypto ----------
 function b64FromBytes(bytes){
   let bin = "";
   const arr = new Uint8Array(bytes);
@@ -225,34 +251,62 @@ async function decryptJson(key, ivBytes, cipherBytes){
   return JSON.parse(dec.decode(new Uint8Array(plain)));
 }
 
-// ---------------- Vault storage ----------------
-function loadBlob(){
-  const raw = localStorage.getItem(LS.VAULT);
+// ---------- Vault registry ----------
+function loadVaults(){
+  const raw = localStorage.getItem(LS.VAULTS);
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+function saveVaults(arr){
+  localStorage.setItem(LS.VAULTS, JSON.stringify(arr));
+}
+function getActiveVaultId(){
+  return localStorage.getItem(LS.ACTIVE) || null;
+}
+function setActiveVaultId(id){
+  if (id) localStorage.setItem(LS.ACTIVE, id);
+  else localStorage.removeItem(LS.ACTIVE);
+}
+
+function rememberSelected(on){
+  if (on) localStorage.setItem(LS.REMEMBER, "1");
+  else localStorage.removeItem(LS.REMEMBER);
+}
+function isRememberSelected(){
+  return localStorage.getItem(LS.REMEMBER) === "1";
+}
+
+// ---------- Vault blob storage ----------
+function loadBlob(vaultId){
+  const raw = localStorage.getItem(blobKey(vaultId));
   if (!raw) return null;
   try { return JSON.parse(raw); } catch { return null; }
 }
-function saveBlob(blob){
-  localStorage.setItem(LS.VAULT, JSON.stringify(blob));
+function saveBlob(vaultId, blob){
+  localStorage.setItem(blobKey(vaultId), JSON.stringify(blob));
 }
-function hasVault(){
-  return !!localStorage.getItem(LS.VAULT);
-}
-
-async function saveVault(){
-  const blob = loadBlob();
-  if (!blob?.salt) throw new Error("Vault not initialized");
-
-  const salt = bytesFromB64(blob.salt);
-  const { iv, cipher } = await encryptJson(state.key, { items: state.items });
-
-  const next = { v: 1, salt: b64FromBytes(salt), iv: b64FromBytes(iv), data: b64FromBytes(cipher) };
-  saveBlob(next);
-  return next;
+function hasBlob(vaultId){
+  return !!localStorage.getItem(blobKey(vaultId));
 }
 
-async function unlockVault(password){
-  const blob = loadBlob();
-  if (!blob) throw new Error("Vault not found");
+async function initVaultBlob(vaultId, password){
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const key = await deriveKeyFromPassword(password, salt);
+
+  const { iv, cipher } = await encryptJson(key, { items: [] });
+  const blob = { v: 1, salt: b64FromBytes(salt), iv: b64FromBytes(iv), data: b64FromBytes(cipher) };
+  saveBlob(vaultId, blob);
+  return { key, blob };
+}
+
+async function unlockVaultBlob(vaultId, password){
+  const blob = loadBlob(vaultId);
+  if (!blob) throw new Error("blob not found");
 
   const salt = bytesFromB64(blob.salt);
   const iv = bytesFromB64(blob.iv);
@@ -261,54 +315,38 @@ async function unlockVault(password){
   const key = await deriveKeyFromPassword(password, salt);
   const payload = await decryptJson(key, iv, data);
 
-  state.key = key;
-  state.items = Array.isArray(payload.items) ? payload.items : [];
-  state.unlocked = true;
-  state.activeId = state.items[0]?.id ?? null;
+  return { key, payload };
 }
 
-async function initNewVault(password){
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const key = await deriveKeyFromPassword(password, salt);
+async function saveVaultData(){
+  const vaultId = state.vaultId;
+  if (!vaultId) throw new Error("no vault selected");
+  const blob = loadBlob(vaultId);
+  if (!blob?.salt) throw new Error("vault not initialized");
 
-  state.key = key;
-  state.items = [];
-  state.unlocked = true;
-  state.activeId = null;
+  const salt = bytesFromB64(blob.salt);
+  const { iv, cipher } = await encryptJson(state.key, { items: state.items });
 
-  const { iv, cipher } = await encryptJson(key, { items: [] });
-  const blob = { v: 1, salt: b64FromBytes(salt), iv: b64FromBytes(iv), data: b64FromBytes(cipher) };
-  saveBlob(blob);
-  return blob;
+  const next = { v: 1, salt: b64FromBytes(salt), iv: b64FromBytes(iv), data: b64FromBytes(cipher) };
+  saveBlob(vaultId, next);
+
+  // обновим updatedAt в реестре
+  const vaults = loadVaults();
+  const v = vaults.find(x => x.id === vaultId);
+  if (v) { v.updatedAt = nowISO(); saveVaults(vaults); }
+
+  return next;
 }
 
-// ---------------- “Remember login” (упрощённо) ----------------
-// Важно: пароль/ключ НЕ сохраняем. Сохраняем только флажок.
-// Это означает: при перезагрузке страницы пароль снова нужен.
-// (иначе пришлось бы хранить ключ/пароль — это уже совсем небезопасно)
-function rememberSession(on){
-  if (on) localStorage.setItem(LS.SESSION, "1");
-  else localStorage.removeItem(LS.SESSION);
-}
-function isRemembered(){
-  return localStorage.getItem(LS.SESSION) === "1";
-}
-
-// ---------------- Types (user-defined) ----------------
+// ---------- Types ----------
 function allTypes(){
   const set = new Set(["all"]);
   for (const it of state.items){
     const t = (it.type || "").trim();
     if (t) set.add(t);
   }
-  // подсказки-стартовые
   ["Заметки","Пароли","Работа","Клиенты","Сервера","Идеи"].forEach(x => set.add(x));
   return [...set];
-}
-
-function badgeLabel(type){
-  const t = (type || "").trim();
-  return t || "Без типа";
 }
 
 function rebuildTypeHints(){
@@ -327,11 +365,16 @@ function renderTypeFilterDropdown(){
     getLabel: (v) => v === "all" ? "Все типы" : v,
     getItems: () => items,
     getValue: () => state.filterType,
-    setValue: (v) => { state.filterType = v; }
+    setValue: (v) => { state.filterType = v; renderList(); }
   });
 }
 
-// ---------------- Render ----------------
+// ---------- Render list/editor ----------
+function badgeLabel(type){
+  const t = (type || "").trim();
+  return t || "Без типа";
+}
+
 function renderList(){
   const q = (searchInput.value || "").trim().toLowerCase();
   const ft = state.filterType;
@@ -383,11 +426,121 @@ function renderEditor(){
   copyBtn.disabled = false;
 }
 
-function setStatus(msg){
-  statusLine.textContent = msg || "";
+// ---------- Vault dropdown on lock screen ----------
+let selectedVaultId = null;
+
+function renderVaultSelectDropdown(){
+  const vaults = loadVaults();
+  if (!selectedVaultId) {
+    const rememberedOk = isRememberSelected();
+    const last = rememberedOk ? getActiveVaultId() : null;
+    selectedVaultId = last || vaults[0]?.id || null;
+  }
+
+  const items = vaults.length
+    ? vaults.map(v => ({ value: v.id, label: v.name }))
+    : [{ value: "__none__", label: "Нет хранилищ (создай новое)" }];
+
+  mountDropdown(vaultSelectDDRoot, {
+    getLabel: (id) => {
+      if (!id || id === "__none__") return "—";
+      const v = vaults.find(x => x.id === id);
+      return v ? v.name : "—";
+    },
+    getItems: () => items,
+    getValue: () => (vaults.length ? selectedVaultId : "__none__"),
+    setValue: (v) => {
+      if (v === "__none__") return;
+      selectedVaultId = v;
+      if (isRememberSelected()) setActiveVaultId(v);
+    }
+  });
+
+  deleteVaultBtn.disabled = vaults.length === 0;
 }
 
-// ---------------- GitHub sync ----------------
+// ---------- Create/Delete vault ----------
+function openCreateVaultModal(){
+  openModal({
+    title: "Создать хранилище",
+    bodyHTML: `
+      <div class="form">
+        <label class="field">
+          <span class="field__label">Название</span>
+          <input class="input" id="cvName" type="text" placeholder="Например: Работа" />
+        </label>
+        <label class="field">
+          <span class="field__label">Пароль</span>
+          <input class="input" id="cvPass" type="password" placeholder="Пароль" />
+        </label>
+        <label class="field">
+          <span class="field__label">Повтор пароля</span>
+          <input class="input" id="cvPass2" type="password" placeholder="Повтор пароля" />
+        </label>
+        <div class="hint">
+          <span class="dot"></span>
+          Это создаст отдельный зашифрованный blob в localStorage.
+        </div>
+      </div>
+    `,
+    footHTML: `
+      <button class="btn btn--ghost" data-close="1">Отмена</button>
+      <button class="btn btn--primary" id="cvOk">Создать</button>
+    `,
+    onMount: () => {
+      qs("#cvOk").addEventListener("click", async () => {
+        const name = (qs("#cvName").value || "").trim();
+        const pass = (qs("#cvPass").value || "").trim();
+        const pass2 = (qs("#cvPass2").value || "").trim();
+
+        if (!name) { toast("Укажи название"); return; }
+        if (pass.length < 4) { toast("Пароль слишком короткий"); return; }
+        if (pass !== pass2) { toast("Пароли не совпадают"); return; }
+
+        const id = uid();
+        const vaults = loadVaults();
+        vaults.push({ id, name, createdAt: nowISO(), updatedAt: nowISO() });
+        saveVaults(vaults);
+
+        await initVaultBlob(id, pass);
+
+        selectedVaultId = id;
+        if (isRememberSelected()) setActiveVaultId(id);
+
+        closeModal();
+        renderVaultSelectDropdown();
+        toast("Хранилище создано");
+      });
+    }
+  });
+}
+
+async function deleteSelectedVault(){
+  const vaults = loadVaults();
+  const v = vaults.find(x => x.id === selectedVaultId);
+  if (!v) return;
+
+  const ok = await confirmModal({
+    title: "Удалить хранилище?",
+    text: `Будет удалено: "${v.name}". Данные (зашифрованный blob) исчезнут с этого устройства.`,
+    okText: "Удалить",
+    danger: true
+  });
+  if (!ok) return;
+
+  // если удаляем активное (последнее выбранное), сбросим
+  localStorage.removeItem(blobKey(v.id));
+  const nextVaults = vaults.filter(x => x.id !== v.id);
+  saveVaults(nextVaults);
+
+  if (getActiveVaultId() === v.id) setActiveVaultId(nextVaults[0]?.id || "");
+  selectedVaultId = nextVaults[0]?.id || null;
+
+  renderVaultSelectDropdown();
+  toast("Удалено");
+}
+
+// ---------- GitHub sync (один cfg + файл на vault) ----------
 function ghLoadCfg(){
   const raw = localStorage.getItem(LS.GH);
   if (!raw) return null;
@@ -398,30 +551,31 @@ function ghSaveCfg(cfg){
 }
 function ghHasCfg(){
   const c = ghLoadCfg();
-  return !!(c?.token && c?.owner && c?.repo && c?.branch && c?.path);
+  return !!(c?.token && c?.owner && c?.repo && c?.branch && c?.baseDir);
 }
-
 function ghApiHeaders(token){
   return {
     "Accept": "application/vnd.github+json",
     "Authorization": `Bearer ${token}`
   };
 }
-
-async function ghGetFile(cfg){
-  const url = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${cfg.path}?ref=${encodeURIComponent(cfg.branch)}`;
+function ghPathForVault(cfg, vaultId){
+  const safeId = String(vaultId).replace(/[^\w\-]/g, "_");
+  const base = String(cfg.baseDir || "data/vaults").replace(/\/+$/,"");
+  return `${base}/${safeId}.json`;
+}
+async function ghGetFile(cfg, path){
+  const url = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${path}?ref=${encodeURIComponent(cfg.branch)}`;
   const res = await fetch(url, { headers: ghApiHeaders(cfg.token) });
   if (res.status === 404) return { exists:false, json:null, sha:null };
   if (!res.ok) throw new Error(`GitHub GET failed: ${res.status}`);
   const data = await res.json();
-  const contentB64 = data.content || "";
-  const text = atob(contentB64.replace(/\n/g,""));
+  const text = atob((data.content || "").replace(/\n/g,""));
   const json = JSON.parse(text);
   return { exists:true, json, sha:data.sha };
 }
-
-async function ghPutFile(cfg, json, sha){
-  const url = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${cfg.path}`;
+async function ghPutFile(cfg, path, json, sha){
+  const url = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${path}`;
   const body = {
     message: "vault: sync",
     content: btoa(unescape(encodeURIComponent(JSON.stringify(json, null, 2)))),
@@ -438,71 +592,56 @@ async function ghPutFile(cfg, json, sha){
   return await res.json();
 }
 
-async function githubPush(){
+async function githubPushCurrent(){
+  if (!state.vaultId) throw new Error("Нет активного хранилища");
   const cfg = ghLoadCfg();
   if (!cfg) throw new Error("GitHub не настроен");
 
   setStatus("GitHub: отправка…");
-  const blob = await saveVault(); // сохраняем локально и берём актуальный blob
+  const blob = await saveVaultData();
 
-  const remote = await ghGetFile(cfg);
-  await ghPutFile(cfg, blob, remote.sha || undefined);
+  const path = ghPathForVault(cfg, state.vaultId);
+  const remote = await ghGetFile(cfg, path);
+  await ghPutFile(cfg, path, blob, remote.sha || undefined);
 
-  setStatus("GitHub: отправлено ✅");
+  setStatus(`GitHub: отправлено ✅ (${path})`);
   toast("GitHub: отправлено");
 }
 
-async function githubPull(){
+async function githubPullToCurrent(){
+  if (!state.vaultId) throw new Error("Нет активного хранилища");
   const cfg = ghLoadCfg();
   if (!cfg) throw new Error("GitHub не настроен");
 
   setStatus("GitHub: загрузка…");
-  const remote = await ghGetFile(cfg);
+  const path = ghPathForVault(cfg, state.vaultId);
+  const remote = await ghGetFile(cfg, path);
+
   if (!remote.exists){
-    setStatus("GitHub: файл не найден");
-    toast("На GitHub ещё нет файла. Сначала отправь.");
+    setStatus("GitHub: файла нет");
+    toast("На GitHub нет файла для этого хранилища. Сначала Push.");
     return;
   }
 
-  // Подменяем локальный blob и просим заново ввести пароль (ключ нужен для расшифровки)
-  saveBlob(remote.json);
-  lockHard("Загружено с GitHub. Введите пароль.");
-}
-
-// ---------------- Actions ----------------
-function lockHard(msg){
-  state = { unlocked:false, key:null, items:[], activeId:null, filterType:"all" };
-  setLocked(true);
-  passwordInput.value = "";
-  if (msg) toast(msg);
-}
-
-function requireConfirm({title, text, okText="Ок", cancelText="Отмена"}){
-  return new Promise((resolve) => {
-    openModal({
-      title,
-      bodyHTML: `<div class="muted" style="line-height:1.5">${escapeHtml(text)}</div>`,
-      footHTML: `
-        <button class="btn btn--ghost" data-close="1" id="mCancel">${escapeHtml(cancelText)}</button>
-        <button class="btn btn--danger" id="mOk">${escapeHtml(okText)}</button>
-      `,
-      onMount: () => {
-        qs("#mCancel").addEventListener("click", () => resolve(false));
-        qs("#mOk").addEventListener("click", () => { closeModal(); resolve(true); });
-      }
-    });
-  });
+  saveBlob(state.vaultId, remote.json);
+  lockHard(`Загружено с GitHub (${path}). Введите пароль.`);
 }
 
 function openGithubModal(){
-  const cur = ghLoadCfg() || { token:"", owner:"mantrova-studio", repo:"vault", branch:"main", path:"data/vault.json" };
+  const cur = ghLoadCfg() || {
+    token: "",
+    owner: "mantrova-studio",
+    repo: "vault",
+    branch: "main",
+    baseDir: "data/vaults"
+  };
 
   openModal({
     title: "GitHub синхронизация",
     bodyHTML: `
       <div class="hint" style="margin-bottom:12px">
         <span class="dot"></span>
-        Хранится зашифрованный файл. Токен нужен с доступом к репозиторию (обычно “Contents: Read and write”).
+        На GitHub сохраняется только зашифрованный blob. Для каждого хранилища — свой файл.
       </div>
 
       <div class="form">
@@ -528,32 +667,36 @@ function openGithubModal(){
             <input class="input" id="ghBranch" type="text" value="${escapeHtml(cur.branch)}" />
           </label>
           <label class="field">
-            <span class="field__label">Path (в репо)</span>
-            <input class="input" id="ghPath" type="text" value="${escapeHtml(cur.path)}" />
+            <span class="field__label">Base dir (в репо)</span>
+            <input class="input" id="ghBaseDir" type="text" value="${escapeHtml(cur.baseDir)}" />
           </label>
+        </div>
+
+        <div class="hint">
+          <span class="dot"></span>
+          Файл текущего хранилища будет: <span style="font-family:var(--mono)">${escapeHtml(cur.baseDir)}/&lt;vaultId&gt;.json</span>
         </div>
       </div>
     `,
     footHTML: `
       <button class="btn btn--ghost" data-close="1">Закрыть</button>
-      <button class="btn btn--ghost" id="ghPull">Загрузить (Pull)</button>
-      <button class="btn btn--primary" id="ghPush">Отправить (Push)</button>
-      <button class="btn btn--danger" id="ghForget">Забыть настройки</button>
+      <button class="btn btn--ghost" id="ghPull">Pull</button>
+      <button class="btn btn--primary" id="ghPush">Push</button>
+      <button class="btn btn--danger" id="ghForget">Забыть</button>
     `,
     onMount: () => {
-      const getCfgFromForm = () => ({
+      const getCfg = () => ({
         token: (qs("#ghToken").value || "").trim(),
         owner: (qs("#ghOwner").value || "").trim(),
         repo: (qs("#ghRepo").value || "").trim(),
         branch: (qs("#ghBranch").value || "main").trim(),
-        path: (qs("#ghPath").value || "data/vault.json").trim()
+        baseDir: (qs("#ghBaseDir").value || "data/vaults").trim()
       });
 
       qs("#ghPush").addEventListener("click", async () => {
         try{
-          const cfg = getCfgFromForm();
-          ghSaveCfg(cfg);
-          await githubPush();
+          ghSaveCfg(getCfg());
+          await githubPushCurrent();
           closeModal();
         }catch(e){
           toast("Ошибка GitHub Push");
@@ -563,9 +706,8 @@ function openGithubModal(){
 
       qs("#ghPull").addEventListener("click", async () => {
         try{
-          const cfg = getCfgFromForm();
-          ghSaveCfg(cfg);
-          await githubPull();
+          ghSaveCfg(getCfg());
+          await githubPullToCurrent();
           closeModal();
         }catch(e){
           toast("Ошибка GitHub Pull");
@@ -574,10 +716,11 @@ function openGithubModal(){
       });
 
       qs("#ghForget").addEventListener("click", async () => {
-        const ok = await requireConfirm({
+        const ok = await confirmModal({
           title: "Удалить настройки GitHub?",
           text: "Токен и параметры репозитория будут удалены с этого устройства.",
-          okText: "Удалить"
+          okText: "Удалить",
+          danger: true
         });
         if (!ok) return;
         localStorage.removeItem(LS.GH);
@@ -588,69 +731,95 @@ function openGithubModal(){
   });
 }
 
-// ---------------- Events ----------------
-loginForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const pass = passwordInput.value;
+// ---------- Lock/Unlock ----------
+function lockHard(msg){
+  state = { unlocked:false, vaultId:null, key:null, items:[], activeId:null, filterType:"all" };
+  setLocked(true);
+  passwordInput.value = "";
+  setStatus("");
+  if (msg) toast(msg);
+}
 
-  try{
-    await unlockVault(pass);
-    rememberSession(rememberCheck.checked);
+async function unlockSelectedVault(password){
+  if (!selectedVaultId) throw new Error("no vault selected");
+  if (!hasBlob(selectedVaultId)) throw new Error("vault blob missing");
 
-    setLocked(false);
-    rebuildTypeHints();
-    renderList();
-    renderEditor();
+  const { key, payload } = await unlockVaultBlob(selectedVaultId, password);
 
-    toast("Открыто");
-    setStatus(ghHasCfg() ? "GitHub настроен" : "GitHub не настроен");
-  }catch{
-    toast("Неверный пароль или хранилище повреждено");
-  }
-});
+  state.unlocked = true;
+  state.vaultId = selectedVaultId;
+  state.key = key;
+  state.items = Array.isArray(payload.items) ? payload.items : [];
+  state.activeId = state.items[0]?.id ?? null;
+  state.filterType = "all";
 
-initBtn.addEventListener("click", async () => {
-  const pass = passwordInput.value;
-  if (!pass || pass.length < 4){
-    toast("Пароль слишком короткий");
-    return;
-  }
-
-  if (hasVault()){
-    const ok = await requireConfirm({
-      title: "Создать новое хранилище?",
-      text: "Текущее хранилище на этом устройстве будет перезаписано.",
-      okText: "Создать",
-      cancelText: "Отмена"
-    });
-    if (!ok) return;
-  }
-
-  await initNewVault(pass);
-  rememberSession(rememberCheck.checked);
+  // update header
+  const vaults = loadVaults();
+  const v = vaults.find(x => x.id === selectedVaultId);
+  activeVaultTitle.textContent = v ? v.name : "Vault";
+  activeVaultSub.textContent = `ID: ${selectedVaultId}`;
 
   setLocked(false);
   rebuildTypeHints();
   renderList();
   renderEditor();
 
-  toast("Создано новое хранилище");
   setStatus(ghHasCfg() ? "GitHub настроен" : "GitHub не настроен");
+}
+
+// ---------- Export/Import per active vault ----------
+function exportCurrentVault(){
+  if (!state.vaultId) return;
+  const blob = loadBlob(state.vaultId);
+  if (!blob) { toast("Нечего экспортировать"); return; }
+
+  const data = JSON.stringify(blob, null, 2);
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([data], { type:"application/json" }));
+  a.download = `vault-${state.vaultId}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function importToCurrentVault(file){
+  if (!state.vaultId) return;
+
+  const text = await file.text();
+  const obj = JSON.parse(text);
+  if (!obj || typeof obj !== "object" || !obj.salt || !obj.iv || !obj.data){
+    toast("Неверный файл");
+    return;
+  }
+  saveBlob(state.vaultId, obj);
+  lockHard("Импортировано. Введите пароль этого хранилища.");
+}
+
+// ---------- Events ----------
+loginForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const pass = (passwordInput.value || "").trim();
+
+  try{
+    rememberSelected(rememberCheck.checked);
+    if (rememberCheck.checked && selectedVaultId) setActiveVaultId(selectedVaultId);
+    await unlockSelectedVault(pass);
+    toast("Открыто");
+  }catch{
+    toast("Неверный пароль или хранилище не найдено");
+  }
 });
 
-lockBtn.addEventListener("click", () => {
-  lockHard("Заблокировано");
-});
+createVaultBtn.addEventListener("click", openCreateVaultModal);
+deleteVaultBtn.addEventListener("click", deleteSelectedVault);
 
-syncBtn.addEventListener("click", () => {
-  openGithubModal();
-});
+lockBtn.addEventListener("click", () => lockHard("Заблокировано"));
+syncBtn.addEventListener("click", () => openGithubModal());
 
 searchInput.addEventListener("input", renderList);
 
 newBtn.addEventListener("click", () => {
   const it = {
-    id: uid(),
+    id: nid(),
     title: "Новая запись",
     type: "Заметки",
     body: "",
@@ -669,17 +838,15 @@ newBtn.addEventListener("click", () => {
 editForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const it = state.items.find(x => x.id === state.activeId);
-  if (!it){
-    toast("Сначала создай запись");
-    return;
-  }
+  if (!it) { toast("Сначала создай запись"); return; }
+
   it.title = (titleInput.value || "").trim() || "Без названия";
-  it.type = (typeInput.value || "").trim() || "Без типа";
-  it.body = bodyInput.value || "";
+  it.type  = (typeInput.value || "").trim() || "Без типа";
+  it.body  = bodyInput.value || "";
   it.updatedAt = nowISO();
 
   try{
-    await saveVault();
+    await saveVaultData();
     rebuildTypeHints();
     renderList();
     toast("Сохранено");
@@ -692,10 +859,11 @@ delBtn.addEventListener("click", async () => {
   const it = state.items.find(x => x.id === state.activeId);
   if (!it) return;
 
-  const ok = await requireConfirm({
+  const ok = await confirmModal({
     title: "Удалить запись?",
-    text: "Удаление необратимо (локально и в шифрованном виде).",
-    okText: "Удалить"
+    text: "Удаление необратимо.",
+    okText: "Удалить",
+    danger: true
   });
   if (!ok) return;
 
@@ -703,7 +871,7 @@ delBtn.addEventListener("click", async () => {
   state.activeId = state.items[0]?.id ?? null;
 
   try{
-    await saveVault();
+    await saveVaultData();
     rebuildTypeHints();
     renderList();
     renderEditor();
@@ -726,33 +894,13 @@ copyBtn.addEventListener("click", async () => {
   }
 });
 
-exportBtn.addEventListener("click", () => {
-  const blob = loadBlob();
-  if (!blob){
-    toast("Нечего экспортировать");
-    return;
-  }
-  const data = JSON.stringify(blob, null, 2);
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([data], { type:"application/json" }));
-  a.download = "vault-export.json";
-  a.click();
-  URL.revokeObjectURL(a.href);
-});
+exportBtn.addEventListener("click", exportCurrentVault);
 
 importFile.addEventListener("change", async (e) => {
   const file = e.target.files?.[0];
   if (!file) return;
-
   try{
-    const text = await file.text();
-    const obj = JSON.parse(text);
-    if (!obj || typeof obj !== "object" || !obj.salt || !obj.iv || !obj.data){
-      toast("Неверный файл");
-      return;
-    }
-    saveBlob(obj);
-    lockHard("Импортировано. Введите пароль.");
+    await importToCurrentVault(file);
   }catch{
     toast("Ошибка импорта");
   }finally{
@@ -760,16 +908,17 @@ importFile.addEventListener("change", async (e) => {
   }
 });
 
-// ---------------- Boot ----------------
+// ---------- Boot ----------
 (function boot(){
   setLocked(true);
-  rememberCheck.checked = isRemembered();
+  rememberCheck.checked = isRememberSelected();
 
-  // Стартовая стилизованная фильтрация (пока locked, но ок)
-  renderTypeFilterDropdown();
+  // если есть хранилища — выберем активное (если remember), иначе первое
+  renderVaultSelectDropdown();
 
-  // Если вообще нет vault — подсказка
-  if (!hasVault()){
-    setTimeout(() => toast("Хранилища ещё нет — введи пароль и нажми «Новое хранилище»"), 250);
+  // если вообще пусто — подсказка
+  const vaults = loadVaults();
+  if (vaults.length === 0){
+    setTimeout(() => toast("Создай хранилище: кнопка «Создать»"), 250);
   }
 })();
