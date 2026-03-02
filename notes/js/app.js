@@ -1,6 +1,18 @@
-// Vault — мульти-хранилища (каждое отдельно) + шифрование + GitHub sync (отдельный файл на vault)
+// Vault — мульти-хранилища + локальное шифрование + сохранение в GitHub (по кнопке)
+// В настройках вводится ТОЛЬКО token. Репозиторий/пути — из "файла настроек" ниже.
 
 const qs = (s, el = document) => el.querySelector(s);
+
+// ===== FILE SETTINGS (правишь тут один раз под репозиторий) =====
+// ВАЖНО: repo должен быть реальным. По умолчанию поставил твой org и repo "polihov".
+const GH_FILE = {
+  owner: "mantrova-studio",
+  repo: "polihov",
+  branch: "main",
+  // куда писать файлы хранилищ в репозитории:
+  baseDir: "notes/data/vaults"
+};
+// ===============================================================
 
 // lock UI
 const loginForm = qs("#loginForm");
@@ -9,12 +21,10 @@ const toggleLoginPass = qs("#toggleLoginPass");
 const rememberCheck = qs("#rememberCheck");
 const vaultSelectDDRoot = qs("#vaultSelectDD");
 const createVaultBtn = qs("#createVaultBtn");
-const renameVaultBtn = qs("#renameVaultBtn");
-const deleteVaultBtn = qs("#deleteVaultBtn");
 
 // app UI
 const lockBtn = qs("#lockBtn");
-const syncBtn = qs("#syncBtn");
+const settingsBtn = qs("#settingsBtn");
 const activeVaultTitle = qs("#activeVaultTitle");
 const activeVaultSub = qs("#activeVaultSub");
 
@@ -29,8 +39,7 @@ const typeInput = qs("#typeInput");
 const bodyInput = qs("#bodyInput");
 const delBtn = qs("#delBtn");
 const copyBtn = qs("#copyBtn");
-const exportBtn = qs("#exportBtn");
-const importFile = qs("#importFile");
+const saveGithubBtn = qs("#saveGithubBtn");
 const statusLine = qs("#statusLine");
 const typeHints = qs("#typeHints");
 const typeFilterDDRoot = qs("#typeFilterDD");
@@ -45,10 +54,9 @@ const modalFootEl = qs("#modalFoot");
 // ---------- LocalStorage keys ----------
 const LS = {
   VAULTS: "vaults_index_v1",         // [{id,name,createdAt,updatedAt}]
-  ACTIVE: "vault_active_v1",         // active vault id (for convenience)
+  ACTIVE: "vault_active_v1",         // active vault id
   REMEMBER: "vault_remember_v1",     // "1" remember selected vault
-  GH: "vault_github_cfg_v1",         // {token, owner, repo, branch, baseDir}
-  // each vault blob: vault_blob_<id>
+  GH_TOKEN: "vault_github_token_v1", // token only
 };
 
 const blobKey = (id) => `vault_blob_${id}`;
@@ -93,7 +101,6 @@ function fmtDate(iso){
 function uid(){
   return "v_" + Math.random().toString(16).slice(2) + Date.now().toString(16);
 }
-
 function nid(){
   return "n_" + Math.random().toString(16).slice(2) + Date.now().toString(16);
 }
@@ -274,7 +281,6 @@ function setActiveVaultId(id){
   if (id) localStorage.setItem(LS.ACTIVE, id);
   else localStorage.removeItem(LS.ACTIVE);
 }
-
 function rememberSelected(on){
   if (on) localStorage.setItem(LS.REMEMBER, "1");
   else localStorage.removeItem(LS.REMEMBER);
@@ -299,7 +305,6 @@ function hasBlob(vaultId){
 async function initVaultBlob(vaultId, password){
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const key = await deriveKeyFromPassword(password, salt);
-
   const { iv, cipher } = await encryptJson(key, { items: [] });
   const blob = { v: 1, salt: b64FromBytes(salt), iv: b64FromBytes(iv), data: b64FromBytes(cipher) };
   saveBlob(vaultId, blob);
@@ -320,7 +325,7 @@ async function unlockVaultBlob(vaultId, password){
   return { key, payload };
 }
 
-async function saveVaultData(){
+async function saveVaultDataLocal(){
   const vaultId = state.vaultId;
   if (!vaultId) throw new Error("no vault selected");
   const blob = loadBlob(vaultId);
@@ -332,7 +337,6 @@ async function saveVaultData(){
   const next = { v: 1, salt: b64FromBytes(salt), iv: b64FromBytes(iv), data: b64FromBytes(cipher) };
   saveBlob(vaultId, next);
 
-  // обновим updatedAt в реестре
   const vaults = loadVaults();
   const v = vaults.find(x => x.id === vaultId);
   if (v) { v.updatedAt = nowISO(); saveVaults(vaults); }
@@ -457,12 +461,9 @@ function renderVaultSelectDropdown(){
       if (isRememberSelected()) setActiveVaultId(v);
     }
   });
-
-  deleteVaultBtn.disabled = vaults.length === 0;
-  renameVaultBtn.disabled = vaults.length === 0;
 }
 
-// ---------- Create/Rename/Delete vault ----------
+// ---------- Create vault ----------
 function openCreateVaultModal(){
   openModal({
     title: "Создать хранилище",
@@ -477,7 +478,7 @@ function openCreateVaultModal(){
           <span class="field__label">Пароль</span>
           <div class="pass">
             <input class="input" id="cvPass" type="password" placeholder="Пароль" />
-            <button class="iconBtn iconBtn--in" id="cvToggle1" type="button" aria-label="Показать пароль" title="Показать пароль">👁</button>
+            <button class="iconBtn iconBtn--in" id="cvToggle1" type="button" title="Показать пароль">👁</button>
           </div>
         </label>
 
@@ -485,14 +486,9 @@ function openCreateVaultModal(){
           <span class="field__label">Повтор пароля</span>
           <div class="pass">
             <input class="input" id="cvPass2" type="password" placeholder="Повтор пароля" />
-            <button class="iconBtn iconBtn--in" id="cvToggle2" type="button" aria-label="Показать пароль" title="Показать пароль">👁</button>
+            <button class="iconBtn iconBtn--in" id="cvToggle2" type="button" title="Показать пароль">👁</button>
           </div>
         </label>
-
-        <div class="hint">
-          <span class="dot"></span>
-          Это создаст отдельный зашифрованный blob в localStorage.
-        </div>
       </div>
     `,
     footHTML: `
@@ -500,20 +496,13 @@ function openCreateVaultModal(){
       <button class="btn btn--primary" id="cvOk">Создать</button>
     `,
     onMount: () => {
-      const t1 = qs("#cvToggle1");
-      const t2 = qs("#cvToggle2");
-      const p1 = qs("#cvPass");
-      const p2 = qs("#cvPass2");
       const wireEye = (btn, inp) => {
         btn.addEventListener("click", () => {
-          const isPass = inp.type === "password";
-          inp.type = isPass ? "text" : "password";
-          btn.setAttribute("aria-label", isPass ? "Скрыть пароль" : "Показать пароль");
-          btn.title = isPass ? "Скрыть пароль" : "Показать пароль";
+          inp.type = (inp.type === "password") ? "text" : "password";
         });
       };
-      wireEye(t1, p1);
-      wireEye(t2, p2);
+      wireEye(qs("#cvToggle1"), qs("#cvPass"));
+      wireEye(qs("#cvToggle2"), qs("#cvPass2"));
 
       qs("#cvOk").addEventListener("click", async () => {
         const name = (qs("#cvName").value || "").trim();
@@ -542,267 +531,188 @@ function openCreateVaultModal(){
   });
 }
 
-function openRenameVaultModal(){
-  const vaults = loadVaults();
-  const v = vaults.find(x => x.id === selectedVaultId);
-  if (!v){
-    toast("Нет выбранного хранилища");
+// ---------- Settings (token + rename/delete current vault) ----------
+function getGhToken(){
+  return (localStorage.getItem(LS.GH_TOKEN) || "").trim();
+}
+function setGhToken(token){
+  if (token) localStorage.setItem(LS.GH_TOKEN, token);
+  else localStorage.removeItem(LS.GH_TOKEN);
+}
+
+function openSettingsModal(){
+  if (!state.unlocked || !state.vaultId){
+    toast("Сначала войди в хранилище");
     return;
   }
 
+  const vaults = loadVaults();
+  const v = vaults.find(x => x.id === state.vaultId);
+
   openModal({
-    title: "Переименовать хранилище",
+    title: "Настройки",
     bodyHTML: `
       <div class="form">
+        <div class="hint">
+          <span class="dot"></span>
+          GitHub repo: <span style="font-family:ui-monospace,monospace">${escapeHtml(GH_FILE.owner)}/${escapeHtml(GH_FILE.repo)}</span>
+          · branch: <span style="font-family:ui-monospace,monospace">${escapeHtml(GH_FILE.branch)}</span>
+        </div>
+
         <label class="field">
-          <span class="field__label">Новое название</span>
-          <input class="input" id="rvName" type="text" value="${escapeHtml(v.name)}" />
+          <span class="field__label">GitHub Token (PAT)</span>
+          <input class="input" id="stToken" type="password" placeholder="ghp_..." value="${escapeHtml(getGhToken())}" />
+          <div class="hint" style="margin-top:8px">
+            <span class="dot"></span>
+            Нужны права на запись в репозиторий (Contents: Read and write).
+          </div>
         </label>
-        <div class="hint"><span class="dot"></span>Название меняется только в реестре. Данные не трогаются.</div>
+
+        <div class="card" style="margin:8px 0 0; box-shadow:none;">
+          <div class="card__head" style="margin-bottom:10px">
+            <div class="muted" style="font-size:12px;text-transform:uppercase;letter-spacing:.06em">Хранилище</div>
+          </div>
+
+          <label class="field">
+            <span class="field__label">Название</span>
+            <input class="input" id="stVaultName" type="text" value="${escapeHtml(v?.name || "Vault")}" />
+          </label>
+
+          <div class="row">
+            <button class="btn btn--primary" id="stRename" type="button">Переименовать</button>
+            <button class="btn btn--danger" id="stDelete" type="button">Удалить хранилище</button>
+          </div>
+
+          <div class="hint" style="margin-top:10px">
+            <span class="dot"></span>
+            Удаление необратимо (локально). На GitHub файлы останутся, если ты их не удалишь вручную.
+          </div>
+        </div>
       </div>
     `,
     footHTML: `
-      <button class="btn btn--ghost" data-close="1">Отмена</button>
-      <button class="btn btn--primary" id="rvOk">Сохранить</button>
+      <button class="btn btn--ghost" data-close="1">Закрыть</button>
+      <button class="btn btn--primary" id="stSaveToken">Сохранить токен</button>
     `,
     onMount: () => {
-      qs("#rvOk").addEventListener("click", () => {
-        const name = (qs("#rvName").value || "").trim();
-        if (!name){
-          toast("Укажи название");
-          return;
-        }
-        v.name = name;
-        v.updatedAt = nowISO();
-        saveVaults(vaults);
+      qs("#stSaveToken").addEventListener("click", () => {
+        const t = (qs("#stToken").value || "").trim();
+        setGhToken(t);
+        toast(t ? "Токен сохранён" : "Токен очищен");
+        closeModal();
+        setStatus(t ? "GitHub: токен есть" : "GitHub: токена нет");
+      });
 
-        renderVaultSelectDropdown();
+      qs("#stRename").addEventListener("click", () => {
+        const newName = (qs("#stVaultName").value || "").trim();
+        if (!newName){ toast("Укажи название"); return; }
 
-        if (state.unlocked && state.vaultId === v.id){
-          activeVaultTitle.textContent = v.name;
-          activeVaultSub.textContent = `ID: ${v.id}`;
-        }
+        const vaults2 = loadVaults();
+        const cur = vaults2.find(x => x.id === state.vaultId);
+        if (!cur){ toast("Хранилище не найдено"); return; }
+
+        cur.name = newName;
+        cur.updatedAt = nowISO();
+        saveVaults(vaults2);
+
+        activeVaultTitle.textContent = newName;
+        activeVaultSub.textContent = `ID: ${state.vaultId}`;
+        renderVaultSelectDropdown(); // чтобы на входе тоже обновилось
+
+        toast("Переименовано");
+      });
+
+      qs("#stDelete").addEventListener("click", async () => {
+        const vaults2 = loadVaults();
+        const cur = vaults2.find(x => x.id === state.vaultId);
+        if (!cur){ toast("Хранилище не найдено"); return; }
+
+        const ok = await confirmModal({
+          title: "Удалить хранилище?",
+          text: `Будет удалено: "${cur.name}". Данные исчезнут с устройства.`,
+          okText: "Удалить",
+          danger: true
+        });
+        if (!ok) return;
+
+        // удалить blob + запись из реестра
+        localStorage.removeItem(blobKey(cur.id));
+        const next = vaults2.filter(x => x.id !== cur.id);
+        saveVaults(next);
+
+        // выбрать другое в lock screen
+        selectedVaultId = next[0]?.id || null;
+        if (getActiveVaultId() === cur.id) setActiveVaultId(selectedVaultId || "");
 
         closeModal();
-        toast("Переименовано");
+        lockHard("Хранилище удалено");
+        renderVaultSelectDropdown();
       });
     }
   });
 }
 
-async function deleteSelectedVault(){
-  const vaults = loadVaults();
-  const v = vaults.find(x => x.id === selectedVaultId);
-  if (!v) return;
-
-  const ok = await confirmModal({
-    title: "Удалить хранилище?",
-    text: `Будет удалено: "${v.name}". Данные (зашифрованный blob) исчезнут с этого устройства.`,
-    okText: "Удалить",
-    danger: true
-  });
-  if (!ok) return;
-
-  localStorage.removeItem(blobKey(v.id));
-  const nextVaults = vaults.filter(x => x.id !== v.id);
-  saveVaults(nextVaults);
-
-  if (getActiveVaultId() === v.id) setActiveVaultId(nextVaults[0]?.id || "");
-  selectedVaultId = nextVaults[0]?.id || null;
-
-  renderVaultSelectDropdown();
-  toast("Удалено");
-}
-
-// ---------- GitHub sync (один cfg + файл на vault) ----------
-function ghLoadCfg(){
-  const raw = localStorage.getItem(LS.GH);
-  if (!raw) return null;
-  try { return JSON.parse(raw); } catch { return null; }
-}
-function ghSaveCfg(cfg){
-  localStorage.setItem(LS.GH, JSON.stringify(cfg));
-}
-function ghHasCfg(){
-  const c = ghLoadCfg();
-  return !!(c?.token && c?.owner && c?.repo && c?.branch && c?.baseDir);
-}
+// ---------- GitHub save (button "Сохранить") ----------
 function ghApiHeaders(token){
   return {
     "Accept": "application/vnd.github+json",
     "Authorization": `Bearer ${token}`
   };
 }
-function ghPathForVault(cfg, vaultId){
+function ghPathForVault(vaultId){
   const safeId = String(vaultId).replace(/[^\w\-]/g, "_");
-  const base = String(cfg.baseDir || "data/vaults").replace(/\/+$/,"");
+  const base = String(GH_FILE.baseDir || "notes/data/vaults").replace(/\/+$/,"");
   return `${base}/${safeId}.json`;
 }
-async function ghGetFile(cfg, path){
-  const url = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${path}?ref=${encodeURIComponent(cfg.branch)}`;
-  const res = await fetch(url, { headers: ghApiHeaders(cfg.token) });
-  if (res.status === 404) return { exists:false, json:null, sha:null };
+async function ghGetFile(token, path){
+  const url = `https://api.github.com/repos/${GH_FILE.owner}/${GH_FILE.repo}/contents/${path}?ref=${encodeURIComponent(GH_FILE.branch)}`;
+  const res = await fetch(url, { headers: ghApiHeaders(token) });
+  if (res.status === 404) return { exists:false, sha:null };
   if (!res.ok) throw new Error(`GitHub GET failed: ${res.status}`);
   const data = await res.json();
-  const text = atob((data.content || "").replace(/\n/g,""));
-  const json = JSON.parse(text);
-  return { exists:true, json, sha:data.sha };
+  return { exists:true, sha:data.sha };
 }
-async function ghPutFile(cfg, path, json, sha){
-  const url = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${path}`;
+async function ghPutFile(token, path, json, sha){
+  const url = `https://api.github.com/repos/${GH_FILE.owner}/${GH_FILE.repo}/contents/${path}`;
   const body = {
-    message: "vault: sync",
+    message: "vault: save",
     content: btoa(unescape(encodeURIComponent(JSON.stringify(json, null, 2)))),
-    branch: cfg.branch
+    branch: GH_FILE.branch
   };
   if (sha) body.sha = sha;
 
   const res = await fetch(url, {
     method: "PUT",
-    headers: { ...ghApiHeaders(cfg.token), "Content-Type":"application/json" },
+    headers: { ...ghApiHeaders(token), "Content-Type":"application/json" },
     body: JSON.stringify(body)
   });
   if (!res.ok) throw new Error(`GitHub PUT failed: ${res.status}`);
   return await res.json();
 }
 
-async function githubPushCurrent(){
-  if (!state.vaultId) throw new Error("Нет активного хранилища");
-  const cfg = ghLoadCfg();
-  if (!cfg) throw new Error("GitHub не настроен");
-
-  setStatus("GitHub: отправка…");
-  const blob = await saveVaultData();
-
-  const path = ghPathForVault(cfg, state.vaultId);
-  const remote = await ghGetFile(cfg, path);
-  await ghPutFile(cfg, path, blob, remote.sha || undefined);
-
-  setStatus(`GitHub: отправлено ✅ (${path})`);
-  toast("GitHub: отправлено");
-}
-
-async function githubPullToCurrent(){
-  if (!state.vaultId) throw new Error("Нет активного хранилища");
-  const cfg = ghLoadCfg();
-  if (!cfg) throw new Error("GitHub не настроен");
-
-  setStatus("GitHub: загрузка…");
-  const path = ghPathForVault(cfg, state.vaultId);
-  const remote = await ghGetFile(cfg, path);
-
-  if (!remote.exists){
-    setStatus("GitHub: файла нет");
-    toast("На GitHub нет файла для этого хранилища. Сначала Push.");
+async function githubSaveCurrentVault(){
+  const token = getGhToken();
+  if (!token){
+    toast("В настройках добавь GitHub токен");
+    openSettingsModal();
+    return;
+  }
+  if (!state.unlocked || !state.vaultId){
+    toast("Нет активного хранилища");
     return;
   }
 
-  saveBlob(state.vaultId, remote.json);
-  lockHard(`Загружено с GitHub (${path}). Введите пароль.`);
-}
+  setStatus("GitHub: сохранение…");
 
-function openGithubModal(){
-  const cur = ghLoadCfg() || {
-    token: "",
-    owner: "mantrova-studio",
-    repo: "vault",
-    branch: "main",
-    baseDir: "data/vaults"
-  };
+  // сначала локально применим (чтобы blob был актуальный)
+  const blob = await saveVaultDataLocal();
 
-  openModal({
-    title: "GitHub синхронизация",
-    bodyHTML: `
-      <div class="hint" style="margin-bottom:12px">
-        <span class="dot"></span>
-        На GitHub сохраняется только зашифрованный blob. Для каждого хранилища — свой файл.
-      </div>
+  const path = ghPathForVault(state.vaultId);
+  const remote = await ghGetFile(token, path);
+  await ghPutFile(token, path, blob, remote.sha || undefined);
 
-      <div class="form">
-        <label class="field">
-          <span class="field__label">Token (PAT)</span>
-          <input class="input" id="ghToken" type="password" placeholder="ghp_..." value="${escapeHtml(cur.token)}" />
-        </label>
-
-        <div class="row row--2">
-          <label class="field">
-            <span class="field__label">Owner</span>
-            <input class="input" id="ghOwner" type="text" value="${escapeHtml(cur.owner)}" />
-          </label>
-          <label class="field">
-            <span class="field__label">Repo</span>
-            <input class="input" id="ghRepo" type="text" value="${escapeHtml(cur.repo)}" />
-          </label>
-        </div>
-
-        <div class="row row--2">
-          <label class="field">
-            <span class="field__label">Branch</span>
-            <input class="input" id="ghBranch" type="text" value="${escapeHtml(cur.branch)}" />
-          </label>
-          <label class="field">
-            <span class="field__label">Base dir (в репо)</span>
-            <input class="input" id="ghBaseDir" type="text" value="${escapeHtml(cur.baseDir)}" />
-          </label>
-        </div>
-
-        <div class="hint">
-          <span class="dot"></span>
-          Файл текущего хранилища будет: <span style="font-family:ui-monospace,monospace">${escapeHtml(cur.baseDir)}/&lt;vaultId&gt;.json</span>
-        </div>
-      </div>
-    `,
-    footHTML: `
-      <button class="btn btn--ghost" data-close="1">Закрыть</button>
-      <button class="btn btn--ghost" id="ghPull">Pull</button>
-      <button class="btn btn--primary" id="ghPush">Push</button>
-      <button class="btn btn--danger" id="ghForget">Забыть</button>
-    `,
-    onMount: () => {
-      const getCfg = () => ({
-        token: (qs("#ghToken").value || "").trim(),
-        owner: (qs("#ghOwner").value || "").trim(),
-        repo: (qs("#ghRepo").value || "").trim(),
-        branch: (qs("#ghBranch").value || "main").trim(),
-        baseDir: (qs("#ghBaseDir").value || "data/vaults").trim()
-      });
-
-      qs("#ghPush").addEventListener("click", async () => {
-        try{
-          ghSaveCfg(getCfg());
-          await githubPushCurrent();
-          closeModal();
-        }catch(e){
-          toast("Ошибка GitHub Push");
-          setStatus(String(e?.message || e));
-        }
-      });
-
-      qs("#ghPull").addEventListener("click", async () => {
-        try{
-          ghSaveCfg(getCfg());
-          await githubPullToCurrent();
-          closeModal();
-        }catch(e){
-          toast("Ошибка GitHub Pull");
-          setStatus(String(e?.message || e));
-        }
-      });
-
-      qs("#ghForget").addEventListener("click", async () => {
-        const ok = await confirmModal({
-          title: "Удалить настройки GitHub?",
-          text: "Токен и параметры репозитория будут удалены с этого устройства.",
-          okText: "Удалить",
-          danger: true
-        });
-        if (!ok) return;
-        localStorage.removeItem(LS.GH);
-        toast("GitHub настройки удалены");
-        closeModal();
-      });
-    }
-  });
+  setStatus(`GitHub: сохранено ✅`);
+  toast("Сохранено в GitHub");
 }
 
 // ---------- Lock/Unlock ----------
@@ -837,34 +747,7 @@ async function unlockSelectedVault(password){
   renderList();
   renderEditor();
 
-  setStatus(ghHasCfg() ? "GitHub настроен" : "GitHub не настроен");
-}
-
-// ---------- Export/Import per active vault ----------
-function exportCurrentVault(){
-  if (!state.vaultId) return;
-  const blob = loadBlob(state.vaultId);
-  if (!blob) { toast("Нечего экспортировать"); return; }
-
-  const data = JSON.stringify(blob, null, 2);
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([data], { type:"application/json" }));
-  a.download = `vault-${state.vaultId}.json`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
-
-async function importToCurrentVault(file){
-  if (!state.vaultId) return;
-
-  const text = await file.text();
-  const obj = JSON.parse(text);
-  if (!obj || typeof obj !== "object" || !obj.salt || !obj.iv || !obj.data){
-    toast("Неверный файл");
-    return;
-  }
-  saveBlob(state.vaultId, obj);
-  lockHard("Импортировано. Введите пароль этого хранилища.");
+  setStatus(getGhToken() ? "GitHub: токен есть" : "GitHub: токена нет");
 }
 
 // ---------- Events ----------
@@ -883,18 +766,15 @@ loginForm.addEventListener("submit", async (e) => {
 });
 
 createVaultBtn.addEventListener("click", openCreateVaultModal);
-renameVaultBtn.addEventListener("click", openRenameVaultModal);
-deleteVaultBtn.addEventListener("click", deleteSelectedVault);
 
 toggleLoginPass.addEventListener("click", () => {
   const isPass = passwordInput.type === "password";
   passwordInput.type = isPass ? "text" : "password";
-  toggleLoginPass.setAttribute("aria-label", isPass ? "Скрыть пароль" : "Показать пароль");
   toggleLoginPass.title = isPass ? "Скрыть пароль" : "Показать пароль";
 });
 
 lockBtn.addEventListener("click", () => lockHard("Заблокировано"));
-syncBtn.addEventListener("click", () => openGithubModal());
+settingsBtn.addEventListener("click", openSettingsModal);
 
 searchInput.addEventListener("input", renderList);
 
@@ -909,7 +789,6 @@ newBtn.addEventListener("click", () => {
   };
   state.items.push(it);
   state.activeId = it.id;
-
   rebuildTypeHints();
   renderList();
   renderEditor();
@@ -918,6 +797,7 @@ newBtn.addEventListener("click", () => {
 
 editForm.addEventListener("submit", async (e) => {
   e.preventDefault();
+
   const it = state.items.find(x => x.id === state.activeId);
   if (!it) { toast("Сначала создай запись"); return; }
 
@@ -927,12 +807,31 @@ editForm.addEventListener("submit", async (e) => {
   it.updatedAt = nowISO();
 
   try{
-    await saveVaultData();
+    await saveVaultDataLocal();
     rebuildTypeHints();
     renderList();
-    toast("Сохранено");
+    toast("Применено");
   }catch{
     toast("Ошибка сохранения");
+  }
+});
+
+saveGithubBtn.addEventListener("click", async () => {
+  try{
+    // чтобы не забывать применить изменения — сначала синхронизируем поля в item
+    const it = state.items.find(x => x.id === state.activeId);
+    if (it){
+      it.title = (titleInput.value || "").trim() || "Без названия";
+      it.type  = (typeInput.value || "").trim() || "Без типа";
+      it.body  = bodyInput.value || "";
+      it.updatedAt = nowISO();
+    }
+    await githubSaveCurrentVault();
+    rebuildTypeHints();
+    renderList();
+  }catch(e){
+    toast("Ошибка GitHub");
+    setStatus(String(e?.message || e));
   }
 });
 
@@ -952,7 +851,7 @@ delBtn.addEventListener("click", async () => {
   state.activeId = state.items[0]?.id ?? null;
 
   try{
-    await saveVaultData();
+    await saveVaultDataLocal();
     rebuildTypeHints();
     renderList();
     renderEditor();
@@ -975,25 +874,10 @@ copyBtn.addEventListener("click", async () => {
   }
 });
 
-exportBtn.addEventListener("click", exportCurrentVault);
-
-importFile.addEventListener("change", async (e) => {
-  const file = e.target.files?.[0];
-  if (!file) return;
-  try{
-    await importToCurrentVault(file);
-  }catch{
-    toast("Ошибка импорта");
-  }finally{
-    importFile.value = "";
-  }
-});
-
 // ---------- Boot ----------
 (function boot(){
   setLocked(true);
   rememberCheck.checked = isRememberSelected();
-
   renderVaultSelectDropdown();
 
   const vaults = loadVaults();
