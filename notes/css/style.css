@@ -1,7 +1,5 @@
 :root{
   --bg:#070A0F;
-  --panel:#0B1020;
-  --panel2:#0A0F1C;
   --stroke:rgba(255,255,255,.08);
   --text:rgba(255,255,255,.92);
   --muted:rgba(255,255,255,.60);
@@ -29,7 +27,7 @@ body{margin:0;font-family:var(--sans);color:var(--text);background:var(--bg)}
 
 .wrap{max-width:1100px;margin:0 auto;padding:0 16px}
 
-/* ===== LOCK: до входа скрываем ВСЁ кроме lockScreen ===== */
+/* до входа скрываем всё кроме lock */
 body.is-locked .topbar,
 body.is-locked .app,
 body.is-locked .toast,
@@ -43,7 +41,7 @@ body.is-locked .modal { display:none !important; }
   padding:28px 16px;
 }
 .lock__card{
-  width:min(520px, 100%);
+  width:min(620px, 100%);
   background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
   border:1px solid var(--stroke);
   border-radius:22px;
@@ -103,8 +101,8 @@ body.is-locked .modal { display:none !important; }
 }
 
 .row{display:flex;gap:10px;align-items:center}
-.row--2{display:grid;grid-template-columns:1fr 280px;gap:10px}
-@media (max-width: 720px){.row--2{grid-template-columns:1fr}}
+.row--2{display:grid;grid-template-columns:1fr 320px;gap:10px}
+@media (max-width: 760px){.row--2{grid-template-columns:1fr}}
 
 .spacer{flex:1}
 
@@ -135,7 +133,7 @@ body.is-locked .modal { display:none !important; }
 
 .toolbar{
   display:grid;
-  grid-template-columns: 1fr 220px auto;
+  grid-template-columns: 1fr 240px auto;
   gap:10px;
   margin-bottom:12px;
 }
@@ -200,7 +198,7 @@ body.is-locked .modal { display:none !important; }
   padding-top:12px;
 }
 
-/* ===== Styled dropdown ===== */
+/* dropdown */
 .dd{position:relative}
 .dd__btn{
   width:100%;
@@ -244,12 +242,12 @@ body.is-locked .modal { display:none !important; }
   border:1px solid rgba(124,92,255,.35);
 }
 
-/* ===== Modal ===== */
+/* modal */
 .modal{position:fixed;inset:0;z-index:50}
 .modal__overlay{position:absolute;inset:0;background:rgba(0,0,0,.55);backdrop-filter: blur(6px)}
 .modal__panel{
   position:relative;
-  width:min(680px, 92vw);
+  width:min(720px, 92vw);
   margin: 8vh auto 0;
   background: rgba(10,15,28,.92);
   border:1px solid var(--stroke);
@@ -270,7 +268,6 @@ body.is-locked .modal { display:none !important; }
   border-top:1px solid var(--stroke);
   display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;
 }
-
 .iconBtn{
   width:36px;height:36px;border-radius:12px;
   border:1px solid var(--stroke);
