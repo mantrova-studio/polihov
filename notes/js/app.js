@@ -927,7 +927,7 @@ function sanitizeHtml(html){
   return root.innerHTML;
 }
 
-// ---------- Rich text: context menu (fixed hide + clamp to screen) ----------
+// ---------- Rich text: context menu (MOBILE HARD FIX) ----------
 function selectionInEditor(){
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return false;
@@ -959,37 +959,35 @@ function setFmtExtraVisible(visible){
   });
 }
 
-function clamp(n, a, b){
-  return Math.max(a, Math.min(b, n));
-}
+function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
 
-function positionFmtMenu(centerX, topY){
-  // делаем видимым, чтобы измерить ширину
+function positionFmtMenuByCenter(centerX, anchorTopY){
   const margin = 8;
-  const desiredY = topY - 44 - 12; // выше текста
+  const desiredTop = anchorTopY - 44 - 14;
 
-  // временно ставим грубо, потом уточним по width/height
+  // показать, чтобы измерить
+  fmtMenu.hidden = false;
+
+  // первый грубый сет
   fmtMenu.style.left = `${centerX}px`;
-  fmtMenu.style.top = `${Math.max(10, desiredY)}px`;
+  fmtMenu.style.top = `${Math.max(margin, desiredTop)}px`;
   fmtMenu.style.transform = "none";
 
-  // после отрисовки — измеряем и поджимаем в экран
   requestAnimationFrame(() => {
     if (fmtMenu.hidden) return;
     const r = fmtMenu.getBoundingClientRect();
 
     const left = clamp(centerX - r.width / 2, margin, window.innerWidth - r.width - margin);
-    const top = clamp(desiredY, margin, window.innerHeight - r.height - margin);
+    const top  = clamp(desiredTop, margin, window.innerHeight - r.height - margin);
 
     fmtMenu.style.left = `${left}px`;
-    fmtMenu.style.top = `${top}px`;
+    fmtMenu.style.top  = `${top}px`;
   });
 }
 
 function showFmtMenuAt(x, y, showFormatting){
   setFmtExtraVisible(showFormatting);
-  fmtMenu.hidden = false;
-  positionFmtMenu(x, y);
+  positionFmtMenuByCenter(x, y);
 }
 
 function showFmtMenuNearSelection(){
@@ -1080,7 +1078,7 @@ function resetFormatting(){
   unwrapSpoilersInRange(range);
 }
 
-// кнопки меню
+// меню: кнопки
 fmtMenu.addEventListener("click", async (e) => {
   const btn = e.target.closest(".fmt__btn");
   if (!btn) return;
@@ -1100,7 +1098,8 @@ fmtMenu.addEventListener("click", async (e) => {
     return;
   }
 
-  if (!selectionInEditor() || !hasSelection()) return;
+  // форматирование только если есть выделение в редакторе
+  if (!(selectionInEditor() && hasSelection())) return;
 
   if (cmd === "spoiler"){
     wrapSelectionWithSpoiler();
@@ -1120,41 +1119,65 @@ fmtMenu.addEventListener("click", async (e) => {
   bodyInput.focus();
 });
 
-// правый клик: если выделение есть -> формат; если нет -> только copy/paste
+// Показ меню: выделение -> полное; без выделения -> только copy/paste
+function openFmtForCurrentState(x, y){
+  const showFormatting = selectionInEditor() && hasSelection();
+  if (showFormatting){
+    showFmtMenuNearSelection();
+  } else {
+    showFmtMenuAt(x, y, false);
+  }
+}
+
+// ✅ На ПК — правый клик. На мобиле — долгий тап может тоже вызывать contextmenu.
 bodyInput.addEventListener("contextmenu", (e) => {
   e.preventDefault();
-  const hasSel = selectionInEditor() && hasSelection();
-
-  if (hasSel){
-    showFmtMenuNearSelection();
-  }else{
-    showFmtMenuAt(e.clientX, e.clientY, false);
-  }
+  openFmtForCurrentState(e.clientX, e.clientY);
 });
 
-// ✅ ГЛАВНЫЙ ФИКС: при любом клике/тапе/скролле/ресайзе — меню закрывается
-document.addEventListener("pointerdown", (e) => {
-  if (fmtMenu.hidden) return;
-  if (fmtMenu.contains(e.target)) return; // клик по меню — не закрываем
-  hideFmtMenu();
-}, true);
-
-document.addEventListener("scroll", () => hideFmtMenu(), true);
-window.addEventListener("resize", () => hideFmtMenu());
-
-// selectionchange: если выделение пропало — скрыть
+// ✅ Если выделение реально есть (и браузер сам не вызвал contextmenu) — показываем меню
 document.addEventListener("selectionchange", () => {
   if (selectionInEditor() && hasSelection()){
     showFmtMenuNearSelection();
-  } else {
-    hideFmtMenu();
   }
 });
 
-// клик в редактор без выделения — тоже закрыть (на всякий)
-bodyInput.addEventListener("pointerup", () => {
-  if (!hasSelection()) hideFmtMenu();
-});
+// ====== HARD HIDE (главный фикс) ======
+// На Android бывает, что selectionchange не стреляет при “снял выделение”.
+// Поэтому: если в любой момент НЕТ выделения — скрываем.
+
+function hardHideIfNoSelection(){
+  if (!fmtMenu.hidden && !hasSelection()){
+    hideFmtMenu();
+  }
+}
+
+// 1) Любой тап/клик где угодно (даже в редакторе)
+document.addEventListener("pointerdown", (e) => {
+  if (fmtMenu.hidden) return;
+  if (fmtMenu.contains(e.target)) return; // нажатие на меню — не закрываем
+  hideFmtMenu();
+}, true);
+
+// 2) Отпустил палец/мышь -> если выделения нет — закрыть
+document.addEventListener("pointerup", () => {
+  hardHideIfNoSelection();
+}, true);
+
+// 3) Ввод/клавиатура/композиция (русская клавиатура)
+bodyInput.addEventListener("input", hardHideIfNoSelection, true);
+bodyInput.addEventListener("keyup", hardHideIfNoSelection, true);
+bodyInput.addEventListener("compositionstart", hardHideIfNoSelection, true);
+bodyInput.addEventListener("compositionend", hardHideIfNoSelection, true);
+
+// 4) Фокус ушёл на другое поле
+document.addEventListener("focusin", (e) => {
+  if (!bodyInput.contains(e.target)) hideFmtMenu();
+}, true);
+
+// 5) Скролл/ресайз
+document.addEventListener("scroll", () => hideFmtMenu(), true);
+window.addEventListener("resize", () => hideFmtMenu());
 
 // раскрытие спойлера
 bodyInput.addEventListener("click", (e) => {
