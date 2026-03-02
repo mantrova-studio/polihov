@@ -5,9 +5,11 @@ const qs = (s, el = document) => el.querySelector(s);
 // lock UI
 const loginForm = qs("#loginForm");
 const passwordInput = qs("#passwordInput");
+const toggleLoginPass = qs("#toggleLoginPass");
 const rememberCheck = qs("#rememberCheck");
 const vaultSelectDDRoot = qs("#vaultSelectDD");
 const createVaultBtn = qs("#createVaultBtn");
+const renameVaultBtn = qs("#renameVaultBtn");
 const deleteVaultBtn = qs("#deleteVaultBtn");
 
 // app UI
@@ -457,9 +459,10 @@ function renderVaultSelectDropdown(){
   });
 
   deleteVaultBtn.disabled = vaults.length === 0;
+  renameVaultBtn.disabled = vaults.length === 0;
 }
 
-// ---------- Create/Delete vault ----------
+// ---------- Create/Rename/Delete vault ----------
 function openCreateVaultModal(){
   openModal({
     title: "Создать хранилище",
@@ -469,14 +472,23 @@ function openCreateVaultModal(){
           <span class="field__label">Название</span>
           <input class="input" id="cvName" type="text" placeholder="Например: Работа" />
         </label>
+
         <label class="field">
           <span class="field__label">Пароль</span>
-          <input class="input" id="cvPass" type="password" placeholder="Пароль" />
+          <div class="pass">
+            <input class="input" id="cvPass" type="password" placeholder="Пароль" />
+            <button class="iconBtn iconBtn--in" id="cvToggle1" type="button" aria-label="Показать пароль" title="Показать пароль">👁</button>
+          </div>
         </label>
+
         <label class="field">
           <span class="field__label">Повтор пароля</span>
-          <input class="input" id="cvPass2" type="password" placeholder="Повтор пароля" />
+          <div class="pass">
+            <input class="input" id="cvPass2" type="password" placeholder="Повтор пароля" />
+            <button class="iconBtn iconBtn--in" id="cvToggle2" type="button" aria-label="Показать пароль" title="Показать пароль">👁</button>
+          </div>
         </label>
+
         <div class="hint">
           <span class="dot"></span>
           Это создаст отдельный зашифрованный blob в localStorage.
@@ -488,6 +500,21 @@ function openCreateVaultModal(){
       <button class="btn btn--primary" id="cvOk">Создать</button>
     `,
     onMount: () => {
+      const t1 = qs("#cvToggle1");
+      const t2 = qs("#cvToggle2");
+      const p1 = qs("#cvPass");
+      const p2 = qs("#cvPass2");
+      const wireEye = (btn, inp) => {
+        btn.addEventListener("click", () => {
+          const isPass = inp.type === "password";
+          inp.type = isPass ? "text" : "password";
+          btn.setAttribute("aria-label", isPass ? "Скрыть пароль" : "Показать пароль");
+          btn.title = isPass ? "Скрыть пароль" : "Показать пароль";
+        });
+      };
+      wireEye(t1, p1);
+      wireEye(t2, p2);
+
       qs("#cvOk").addEventListener("click", async () => {
         const name = (qs("#cvName").value || "").trim();
         const pass = (qs("#cvPass").value || "").trim();
@@ -515,6 +542,54 @@ function openCreateVaultModal(){
   });
 }
 
+function openRenameVaultModal(){
+  const vaults = loadVaults();
+  const v = vaults.find(x => x.id === selectedVaultId);
+  if (!v){
+    toast("Нет выбранного хранилища");
+    return;
+  }
+
+  openModal({
+    title: "Переименовать хранилище",
+    bodyHTML: `
+      <div class="form">
+        <label class="field">
+          <span class="field__label">Новое название</span>
+          <input class="input" id="rvName" type="text" value="${escapeHtml(v.name)}" />
+        </label>
+        <div class="hint"><span class="dot"></span>Название меняется только в реестре. Данные не трогаются.</div>
+      </div>
+    `,
+    footHTML: `
+      <button class="btn btn--ghost" data-close="1">Отмена</button>
+      <button class="btn btn--primary" id="rvOk">Сохранить</button>
+    `,
+    onMount: () => {
+      qs("#rvOk").addEventListener("click", () => {
+        const name = (qs("#rvName").value || "").trim();
+        if (!name){
+          toast("Укажи название");
+          return;
+        }
+        v.name = name;
+        v.updatedAt = nowISO();
+        saveVaults(vaults);
+
+        renderVaultSelectDropdown();
+
+        if (state.unlocked && state.vaultId === v.id){
+          activeVaultTitle.textContent = v.name;
+          activeVaultSub.textContent = `ID: ${v.id}`;
+        }
+
+        closeModal();
+        toast("Переименовано");
+      });
+    }
+  });
+}
+
 async function deleteSelectedVault(){
   const vaults = loadVaults();
   const v = vaults.find(x => x.id === selectedVaultId);
@@ -528,7 +603,6 @@ async function deleteSelectedVault(){
   });
   if (!ok) return;
 
-  // если удаляем активное (последнее выбранное), сбросим
   localStorage.removeItem(blobKey(v.id));
   const nextVaults = vaults.filter(x => x.id !== v.id);
   saveVaults(nextVaults);
@@ -674,7 +748,7 @@ function openGithubModal(){
 
         <div class="hint">
           <span class="dot"></span>
-          Файл текущего хранилища будет: <span style="font-family:var(--mono)">${escapeHtml(cur.baseDir)}/&lt;vaultId&gt;.json</span>
+          Файл текущего хранилища будет: <span style="font-family:ui-monospace,monospace">${escapeHtml(cur.baseDir)}/&lt;vaultId&gt;.json</span>
         </div>
       </div>
     `,
@@ -753,7 +827,6 @@ async function unlockSelectedVault(password){
   state.activeId = state.items[0]?.id ?? null;
   state.filterType = "all";
 
-  // update header
   const vaults = loadVaults();
   const v = vaults.find(x => x.id === selectedVaultId);
   activeVaultTitle.textContent = v ? v.name : "Vault";
@@ -810,7 +883,15 @@ loginForm.addEventListener("submit", async (e) => {
 });
 
 createVaultBtn.addEventListener("click", openCreateVaultModal);
+renameVaultBtn.addEventListener("click", openRenameVaultModal);
 deleteVaultBtn.addEventListener("click", deleteSelectedVault);
+
+toggleLoginPass.addEventListener("click", () => {
+  const isPass = passwordInput.type === "password";
+  passwordInput.type = isPass ? "text" : "password";
+  toggleLoginPass.setAttribute("aria-label", isPass ? "Скрыть пароль" : "Показать пароль");
+  toggleLoginPass.title = isPass ? "Скрыть пароль" : "Показать пароль";
+});
 
 lockBtn.addEventListener("click", () => lockHard("Заблокировано"));
 syncBtn.addEventListener("click", () => openGithubModal());
@@ -913,10 +994,8 @@ importFile.addEventListener("change", async (e) => {
   setLocked(true);
   rememberCheck.checked = isRememberSelected();
 
-  // если есть хранилища — выберем активное (если remember), иначе первое
   renderVaultSelectDropdown();
 
-  // если вообще пусто — подсказка
   const vaults = loadVaults();
   if (vaults.length === 0){
     setTimeout(() => toast("Создай хранилище: кнопка «Создать»"), 250);
