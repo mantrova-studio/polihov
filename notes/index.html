@@ -32,6 +32,7 @@
             <span class="field__label">Действия</span>
             <div class="row">
               <button class="btn btn--ghost" id="createVaultBtn" type="button">Создать</button>
+              <button class="btn btn--ghost" id="renameVaultBtn" type="button">Переименовать</button>
               <button class="btn btn--danger" id="deleteVaultBtn" type="button" title="Удалить выбранное">Удалить</button>
             </div>
           </div>
@@ -39,7 +40,10 @@
 
         <label class="field">
           <span class="field__label">Пароль</span>
-          <input class="input" id="passwordInput" type="password" placeholder="Введите пароль" required />
+          <div class="pass">
+            <input class="input" id="passwordInput" type="password" placeholder="Введите пароль" required />
+            <button class="iconBtn iconBtn--in" id="toggleLoginPass" type="button" aria-label="Показать пароль" title="Показать пароль">👁</button>
+          </div>
         </label>
 
         <label class="check">
