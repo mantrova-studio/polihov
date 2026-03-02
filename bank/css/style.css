@@ -726,20 +726,25 @@ body.locked footer{
 .tscTip{
   position: fixed;
   z-index: 999999;
-  max-width: min(320px, calc(100vw - 24px));
-  padding: 10px 12px;
-  border-radius: 14px;
+
+  max-width: 220px;              /* меньше ширина */
+  padding: 4px 8px;              /* меньше отступы */
+  border-radius: 8px;            /* компактнее */
+
   border: 1px solid rgba(255,255,255,.14);
-  background: rgba(10,10,18,.72);
-  backdrop-filter: blur(14px);
-  box-shadow: none; /*0 18px 60px rgba(0,0,0,.55);*/
+  background: rgba(10,10,18,.82);
+  backdrop-filter: blur(10px);
+
+  box-shadow: none;
+
   color: rgba(255,255,255,.92);
-  font-size: 12px;
-  line-height: 1.25;
+  font-size: 11px;               /* меньше шрифт */
+  line-height: 1.2;
+
   pointer-events: none;
-  transform: translateY(6px);
+  transform: translateY(4px);
   opacity: 0;
-  transition: opacity .12s ease, transform .12s ease;
+  transition: opacity .1s ease, transform .1s ease;
 }
 
 .tscTip[data-show="1"]{
@@ -747,5 +752,5 @@ body.locked footer{
   transform: translateY(0);
 }
 
-.tscTip .tt{ font-weight: 800; letter-spacing:.02em; }
+.tscTip .tt{ font-weight: 450; letter-spacing:.02em; }
 .tscTip .ts{ margin-top: 4px; color: rgba(255,255,255,.65); }
