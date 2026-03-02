@@ -34,7 +34,7 @@ const emptyState = qs("#emptyState");
 const editForm = qs("#editForm");
 const titleInput = qs("#titleInput");
 const typeInput = qs("#typeInput");
-const bodyInput = qs("#bodyInput"); // contenteditable div
+const bodyInput = qs("#bodyInput"); // contenteditable
 const delBtn = qs("#delBtn");
 const copyBtn = qs("#copyBtn");
 const saveGithubBtn = qs("#saveGithubBtn");
@@ -542,7 +542,7 @@ function openCreateVaultModal(){
   });
 }
 
-// ---------- Settings (token + rename/delete current vault) ----------
+// ---------- Settings ----------
 function getGhToken(){
   return (localStorage.getItem(LS.GH_TOKEN) || "").trim();
 }
@@ -575,7 +575,7 @@ function openSettingsModal(){
           <input class="input" id="stToken" type="password" placeholder="ghp_..." value="${escapeHtml(getGhToken())}" />
           <div class="hint" style="margin-top:8px">
             <span class="dot"></span>
-            Нужны права на запись в репозиторий (Contents: Read and write).
+            Нужны права на запись (Contents: Read and write).
           </div>
         </label>
 
@@ -898,7 +898,6 @@ function sanitizeHtml(html){
       if (ch.nodeType === Node.ELEMENT_NODE){
         const tag = ch.tagName.toUpperCase();
 
-        // remove all attrs
         const keepSpoiler = (tag === "SPAN") && (ch.getAttribute("class") || "").includes("spoiler");
         [...ch.attributes].forEach(a => ch.removeAttribute(a.name));
         if (keepSpoiler) ch.setAttribute("class", "spoiler");
@@ -910,7 +909,6 @@ function sanitizeHtml(html){
           continue;
         }
 
-        // span only spoiler
         if (tag === "SPAN" && !keepSpoiler){
           const frag = doc.createDocumentFragment();
           while (ch.firstChild) frag.appendChild(ch.firstChild);
@@ -929,7 +927,7 @@ function sanitizeHtml(html){
   return root.innerHTML;
 }
 
-// ---------- Rich text: Telegram-like format menu ----------
+// ---------- Rich text: context menu ----------
 function selectionInEditor(){
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return false;
@@ -940,7 +938,7 @@ function selectionInEditor(){
 
 function hasSelection(){
   const sel = window.getSelection();
-  return sel && sel.rangeCount && !sel.getRangeAt(0).collapsed;
+  return !!(sel && sel.rangeCount && !sel.getRangeAt(0).collapsed);
 }
 
 function getSelectionRect(){
@@ -951,61 +949,70 @@ function getSelectionRect(){
   return r;
 }
 
-function showFmtMenuNearSelection(){
-  if (!selectionInEditor() || !hasSelection()) return;
-  const rect = getSelectionRect();
-  if (!rect) return;
-
-  fmtMenu.hidden = false;
-
-  const x = Math.min(window.innerWidth - 10, Math.max(10, rect.left + rect.width/2));
-  const y = Math.max(10, rect.top - 52);
-
-  fmtMenu.style.left = `${x}px`;
-  fmtMenu.style.top = `${y}px`;
-  fmtMenu.style.transform = "translateX(-50%)";
-}
-
 function hideFmtMenu(){
   fmtMenu.hidden = true;
 }
 
-function wrapSelectionWithSpoiler(){
-  const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0) return;
-  const range = sel.getRangeAt(0);
-  if (range.collapsed) return;
-
-  const span = document.createElement("span");
-  span.className = "spoiler";
-  try{
-    range.surroundContents(span);
-  }catch{
-    const frag = range.extractContents();
-    span.appendChild(frag);
-    range.insertNode(span);
-  }
-
-  sel.removeAllRanges();
-  const nr = document.createRange();
-  nr.selectNodeContents(span);
-  sel.addRange(nr);
+function setFmtExtraVisible(visible){
+  fmtMenu.querySelectorAll('[data-role="fmt-extra"]').forEach(el => {
+    el.style.display = visible ? "" : "none";
+  });
 }
 
-function resetFormatting(){
-  document.execCommand("removeFormat");
+function showFmtMenuAt(x, y, showFormatting){
+  setFmtExtraVisible(showFormatting);
+  fmtMenu.hidden = false;
 
+  // чуть выше
+  const menuH = 44;
+  const yy = Math.max(10, y - menuH - 12);
+  const xx = Math.min(window.innerWidth - 10, Math.max(10, x));
+
+  fmtMenu.style.left = `${xx}px`;
+  fmtMenu.style.top = `${yy}px`;
+  fmtMenu.style.transform = "translateX(-50%)";
+}
+
+function showFmtMenuNearSelection(){
+  const rect = getSelectionRect();
+  if (!rect) return;
+  showFmtMenuAt(rect.left + rect.width/2, rect.top, true);
+}
+
+async function cmdCopy(){
   const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0) return;
-  const range = sel.getRangeAt(0);
+  const selected = sel ? sel.toString() : "";
+  try{
+    if (selected){
+      await navigator.clipboard.writeText(selected);
+      toast("Скопировано");
+      return;
+    }
 
-  const container = range.commonAncestorContainer.nodeType === 1
-    ? range.commonAncestorContainer
-    : range.commonAncestorContainer.parentElement;
+    // если выделения нет — копируем всю заметку (plain text)
+    const it = state.items.find(x => x.id === state.activeId);
+    const all = it ? stripHtml(it.bodyHtml || "") : stripHtml(bodyInput.innerHTML || "");
+    await navigator.clipboard.writeText(all);
+    toast("Скопировано (вся заметка)");
+  }catch{
+    toast("Не удалось скопировать");
+  }
+}
 
-  if (!container) return;
+async function cmdPaste(){
+  try{
+    const text = await navigator.clipboard.readText();
+    if (!text) return;
+    bodyInput.focus();
+    document.execCommand("insertText", false, text);
+    toast("Вставлено");
+  }catch{
+    toast("Вставка недоступна");
+  }
+}
 
-  const spoilers = [...container.querySelectorAll("span.spoiler")];
+function unwrapSpoilersInRange(range){
+  const spoilers = [...bodyInput.querySelectorAll("span.spoiler")];
   for (const sp of spoilers){
     try{
       if (range.intersectsNode(sp)){
@@ -1017,11 +1024,69 @@ function resetFormatting(){
   }
 }
 
-fmtMenu.addEventListener("click", (e) => {
+function wrapSelectionWithSpoiler(){
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return;
+  const range = sel.getRangeAt(0);
+  if (range.collapsed) return;
+
+  // убрать слои спойлера внутри выделения
+  unwrapSpoilersInRange(range.cloneRange());
+
+  // range может стать неактуальным — возьмём заново
+  const sel2 = window.getSelection();
+  if (!sel2 || sel2.rangeCount === 0) return;
+  const range2 = sel2.getRangeAt(0);
+  if (range2.collapsed) return;
+
+  const span = document.createElement("span");
+  span.className = "spoiler";
+
+  try{
+    range2.surroundContents(span);
+  }catch{
+    const frag = range2.extractContents();
+    span.appendChild(frag);
+    range2.insertNode(span);
+  }
+
+  sel2.removeAllRanges();
+  const nr = document.createRange();
+  nr.selectNodeContents(span);
+  sel2.addRange(nr);
+}
+
+function resetFormatting(){
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return;
+  const range = sel.getRangeAt(0).cloneRange();
+
+  document.execCommand("removeFormat");
+  unwrapSpoilersInRange(range);
+}
+
+// кнопки меню
+fmtMenu.addEventListener("click", async (e) => {
   const btn = e.target.closest(".fmt__btn");
   if (!btn) return;
+
   const cmd = btn.dataset.cmd;
-  if (!selectionInEditor()) return;
+
+  if (cmd === "copy"){
+    await cmdCopy();
+    hideFmtMenu();
+    bodyInput.focus();
+    return;
+  }
+  if (cmd === "paste"){
+    await cmdPaste();
+    hideFmtMenu();
+    bodyInput.focus();
+    return;
+  }
+
+  // форматирование только при выделении внутри редактора
+  if (!selectionInEditor() || !hasSelection()) return;
 
   if (cmd === "spoiler"){
     wrapSelectionWithSpoiler();
@@ -1041,14 +1106,20 @@ fmtMenu.addEventListener("click", (e) => {
   bodyInput.focus();
 });
 
-// ПК: правый клик
+// правый клик: если выделение есть -> формат; если нет -> только copy/paste
 bodyInput.addEventListener("contextmenu", (e) => {
-  if (!hasSelection()) return;
   e.preventDefault();
-  showFmtMenuNearSelection();
+  const hasSel = selectionInEditor() && hasSelection();
+
+  if (hasSel){
+    showFmtMenuNearSelection();
+  }else{
+    // меню в точке клика, без форматирования
+    showFmtMenuAt(e.clientX, e.clientY, false);
+  }
 });
 
-// мобилка/ПК: когда выделение меняется
+// selectionchange: показываем только при выделении, иначе скрываем
 document.addEventListener("selectionchange", () => {
   if (selectionInEditor() && hasSelection()){
     showFmtMenuNearSelection();
@@ -1057,9 +1128,11 @@ document.addEventListener("selectionchange", () => {
   }
 });
 
-// клик вне — закрыть
-document.addEventListener("mousedown", (e) => {
-  if (!fmtMenu.hidden && !fmtMenu.contains(e.target)) hideFmtMenu();
+// клик/тап вне — закрыть меню
+document.addEventListener("pointerdown", (e) => {
+  if (fmtMenu.hidden) return;
+  if (fmtMenu.contains(e.target)) return;
+  hideFmtMenu();
 });
 
 // раскрытие спойлера
