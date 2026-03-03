@@ -1,0 +1,215 @@
+<!doctype html> 
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Копилка</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<!--
+  POLIHOV DEV STUDIO
+  FILE: /bank/index.html
+  DESC: Приложение «Копилка» (bank) — UI, модальные окна, контейнеры для динамического рендера JS.
+-->
+
+
+<!-- ===== Login (TSC) ===== -->
+<div class="loginWrap" id="loginWrap" aria-hidden="true">
+  <div class="loginModal" role="dialog" aria-modal="true">
+    <div class="loginHead">
+      <div>
+        <div class="loginTitle">Авторизация</div>
+        <div class="loginSub">Введите пароль, чтобы разблокировать доступ.</div>
+      </div>
+      <!--<button class="iconBtn" id="loginClose" type="button" title="Закрыть" style="color:#fff;">✕</button>-->
+    </div>
+
+    <div class="loginBody">
+      <label class="fieldLabel" for="loginPass">Пароль</label>
+      <input id="loginPass" class="input" type="password" placeholder="••••••••" autocomplete="off" />
+
+      <label class="checkRow mt-10">
+        <input id="loginRemember" type="checkbox" checked />
+        <span>Запомнить вход</span>
+      </label>
+
+      <div class="loginErr is-hidden" id="loginError"></div>
+
+      <div class="loginActions">
+        <!--<button class="btn" id="loginCancel" type="button">Закрыть</button>-->
+        <button class="btn primary" id="loginOk" type="button">Войти</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+  <header class="topbar">
+    <div class="container">
+      <div class="headerRow center">
+
+ <!-- Создать -->
+    <button class="iconBtn createBtn" id="createBtn" title="Создать копилку">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons/sprite.svg#icon-plus"></use></svg></button>
+
+<button class="iconBtn editBtn" id="actionsBtn" type="button" title="Показать/скрыть кнопки">
+  <span id="actionsIconEdit" aria-hidden="true">
+   <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons/sprite.svg#icon-pencil"></use></svg></span>
+  <span id="actionsIconDone" aria-hidden="true" class="is-hidden">
+   <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons/sprite.svg#icon-check"></use></svg></span>
+</button>
+
+
+
+
+    <!-- GitHub -->
+    <button class="iconBtn saveGithubBtn" id="saveGithubBtn" title="Сохранить">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons/sprite.svg#icon-cloud"></use></svg></button>
+
+    <!-- Порядок -->
+   <!-- <button class="iconBtn orderToggle" id="orderBtn" title="Редактировать порядок">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" data-order="edit"><use href="assets/icons/sprite.svg#icon-order"></use></svg>
+  <svg class="icon icon--sm is-hidden" viewBox="0 0 24 24" aria-hidden="true" id="orderIconDone" data-order="done"><use href="assets/icons/sprite.svg#icon-check"></use></svg>
+</button>-->
+
+<button class="iconBtn orderToggle" id="orderBtn" type="button" title="Изменить порядок">
+  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" data-order="edit">
+    <use href="assets/icons/sprite.svg#icon-order"></use>
+  </svg>
+  <svg class="icon icon--sm is-hidden" viewBox="0 0 24 24" aria-hidden="true" id="orderIconDone" data-order="done">
+    <use href="assets/icons/sprite.svg#icon-check"></use>
+  </svg>
+</button>
+
+        <h1 class="siteTitle"><br>НАКОПЛЕНИЯ<span class="muted"> </span></h1>
+      </div>
+
+      <div class="controls">
+        <!--<button class="btn small primary" id="createBtn" type="button">Создать копилку</button>
+<button class="btn small primary" id="saveGithubBtn" type="button">Сохранить в GitHub</button>-->
+        <button class="btn small" id="depositBtn" type="button">Пополнить</button>
+        <button class="btn small danger" id="withdrawBtn" type="button">Вывести</button>
+      </div>
+
+      <div class="controls pt-0">
+        <button class="btn small" id="loadGithubBtn" type="button">Загрузить из GitHub</button>
+   
+      </div>
+
+      <div class="searchRow">
+        <input id="searchInput" class="searchInput" type="search" placeholder="Поиск по названию..." />
+        <button id="clearSearch" class="searchClear" type="button" title="Очистить">✕</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="grid" id="grid"></div>
+    <div class="empty is-hidden" id="empty">Пока нет копилок. Создай первую 🙂</div>
+  </main>
+
+  <!-- ===== Modal: create/edit/ops ===== -->
+  <div class="modalWrap" id="modalWrap" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalHead">
+        <h3 id="modalTitle">Окно</h3>
+        <button class="iconBtn iconBtn--white" id="closeModal" type="button" title="Закрыть">✕</button>
+      </div>
+
+      <div class="modalBody">
+        <!-- create form -->
+        <div id="createForm" class="is-hidden">
+          <div class="formGrid">
+            <div class="field span-all">
+              <label class="fieldLabel">Название</label>
+              <input id="f_name" class="input" placeholder="Например: Отпуск" />
+            </div>
+
+            <div class="field">
+              <label class="fieldLabel">Цель (₽)</label>
+              <input id="f_goal" class="input" inputmode="numeric" placeholder="Например: 50000" />
+              <div class="tiny muted">Можно оставить пустым — это будет “без цели”.</div>
+            </div>
+
+            <div class="field">
+              <label class="fieldLabel">Стартовая сумма (₽)</label>
+              <input id="f_start" class="input" inputmode="numeric" placeholder="Например: 0" />
+            </div>
+          </div>
+        </div>
+
+        <!-- operation form -->
+        <div id="opForm" class="is-hidden">
+          <div class="formGrid">
+            <div class="field span-all">
+              <label class="fieldLabel">Копилка</label>
+              <select id="f_bank" class="select"></select>
+            </div>
+
+            <div class="field span-all">
+              <label class="fieldLabel">Сумма (₽)</label>
+              <input id="f_amount" class="input" inputmode="numeric" placeholder="Например: 1500" />
+              <div class="tiny muted" id="opHint"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modalFoot">
+        <button class="btn" id="cancelBtn" type="button">Отмена</button>
+        <button class="btn primary" id="saveBtn" type="button">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== GitHub Token modal ===== -->
+<div class="tokenWrap" id="tokenWrap" aria-hidden="true">
+  <div class="tokenModal" role="dialog" aria-modal="true">
+    <div class="tokenHead">
+      <div>
+        <div class="tokenTitle">Ключ сохранения</div>
+        <div class="tokenSub">Нужен для сохранения изменений. Можно запомнить на этом устройстве.</div>
+      </div>
+      <button class="iconBtn iconBtn--white" id="tokenClose" type="button" title="Закрыть">✕</button>
+    </div>
+
+    <div class="tokenBody">
+      <label class="fieldLabel" for="tokenInput">Ключ:</label>
+      <input id="tokenInput" class="input" type="password" placeholder="введите ключ сохранения..." autocomplete="off" />
+
+      <label class="checkRow">
+        <input id="tokenRemember" type="checkbox" />
+        <span>Запомнить на этом устройстве</span>
+      </label>
+
+      <div class="tokenErr is-hidden" id="tokenError"></div>
+
+      <div class="tokenActions">
+        <button class="btn" id="tokenCancel" type="button">Отмена</button>
+        <button class="btn" id="tokenTest" type="button">Проверить ключ</button>
+        <button class="btn primary" id="tokenOk" type="button">Сохранить</button>
+      </div>
+
+      <!--<div class="tiny muted" style="margin-top:10px;">
+        * Токен хранится только у тебя в браузере (если включишь “Запомнить”).
+      </div>-->
+    </div>
+  </div>
+</div>
+
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<script src="js/app.js"></script>
+<script type="module" src="js/tooltip.js"></script>
+  
+<footer class="footerDev">
+  <div class="container">
+    <div class="footerDevText">
+      Разработано<br>
+      <span class="footerBrand">© POLIHOV DEV STUDIO</span>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
