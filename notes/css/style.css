@@ -392,11 +392,14 @@ body::-webkit-scrollbar-thumb:hover,
   user-select: text;
 }
 
-/* Format menu (адаптив) */
+/* ===== Format menu (SUPER HARD HIDE) ===== */
 .fmt{
   position: fixed;
   z-index: 9998;
-  display:flex;
+
+  /* главное: по умолчанию скрыто */
+  display: none !important;
+
   align-items:center;
   gap:8px;
   padding:8px;
@@ -408,6 +411,10 @@ body::-webkit-scrollbar-thumb:hover,
 
   max-width: calc(100vw - 16px);
   flex-wrap: wrap;
+}
+
+.fmt[data-open="1"]{
+  display: flex !important;
 }
 
 .fmt__sep{
