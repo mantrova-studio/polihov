@@ -649,7 +649,12 @@ function openImportVaultModal(){
           </div>
 
           <div class="impList mt-10" id="impList"></div>
-          
+
+          <div class="hint mt-10">
+            <span class="dot"></span>
+            Папка: <span class="mono">${escapeHtml(GH_FILE.baseDir)}</span>
+          </div>
+                
         </div>
       </div>
     `,
