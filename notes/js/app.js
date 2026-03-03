@@ -927,7 +927,7 @@ function sanitizeHtml(html){
   return root.innerHTML;
 }
 
-// ---------- Rich text: context menu (MOBILE HARD FIX) ----------
+// ---------- Rich text: context menu (SUPER HARD FIX) ----------
 function selectionInEditor(){
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return false;
@@ -945,12 +945,10 @@ function getSelectionRect(){
   const sel = window.getSelection();
   if (!sel || !sel.rangeCount) return null;
   const r = sel.getRangeAt(0).getBoundingClientRect();
-  if (!r || (r.width === 0 && r.height === 0)) return null;
+  if (!r) return null;
+  // иногда у выделения ширина/высота 0 — тогда не показываем как "выделение"
+  if (r.width === 0 && r.height === 0) return null;
   return r;
-}
-
-function hideFmtMenu(){
-  fmtMenu.hidden = true;
 }
 
 function setFmtExtraVisible(visible){
@@ -961,33 +959,40 @@ function setFmtExtraVisible(visible){
 
 function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
 
-function positionFmtMenuByCenter(centerX, anchorTopY){
+function hideFmtMenu(forceClearSelection = false){
+  fmtMenu.dataset.open = "0";
+  if (forceClearSelection){
+    try{
+      const sel = window.getSelection();
+      if (sel) sel.removeAllRanges();
+    }catch{}
+  }
+}
+
+function showFmtMenuAt(x, y, showFormatting){
+  setFmtExtraVisible(showFormatting);
+
+  // показать
+  fmtMenu.dataset.open = "1";
+
   const margin = 8;
-  const desiredTop = anchorTopY - 44 - 14;
+  const desiredTop = y - 44 - 14;
 
-  // показать, чтобы измерить
-  fmtMenu.hidden = false;
-
-  // первый грубый сет
-  fmtMenu.style.left = `${centerX}px`;
+  // грубо
+  fmtMenu.style.left = `${x}px`;
   fmtMenu.style.top = `${Math.max(margin, desiredTop)}px`;
-  fmtMenu.style.transform = "none";
 
+  // поджать в экран после измерения
   requestAnimationFrame(() => {
-    if (fmtMenu.hidden) return;
+    if (fmtMenu.dataset.open !== "1") return;
     const r = fmtMenu.getBoundingClientRect();
 
-    const left = clamp(centerX - r.width / 2, margin, window.innerWidth - r.width - margin);
+    const left = clamp(x - r.width/2, margin, window.innerWidth - r.width - margin);
     const top  = clamp(desiredTop, margin, window.innerHeight - r.height - margin);
 
     fmtMenu.style.left = `${left}px`;
     fmtMenu.style.top  = `${top}px`;
   });
-}
-
-function showFmtMenuAt(x, y, showFormatting){
-  setFmtExtraVisible(showFormatting);
-  positionFmtMenuByCenter(x, y);
 }
 
 function showFmtMenuNearSelection(){
@@ -1005,6 +1010,7 @@ async function cmdCopy(){
       toast("Скопировано");
       return;
     }
+    // без выделения — копируем всю заметку
     const it = state.items.find(x => x.id === state.activeId);
     const all = it ? stripHtml(it.bodyHtml || "") : stripHtml(bodyInput.innerHTML || "");
     await navigator.clipboard.writeText(all);
@@ -1078,7 +1084,7 @@ function resetFormatting(){
   unwrapSpoilersInRange(range);
 }
 
-// меню: кнопки
+// ==== клики по меню
 fmtMenu.addEventListener("click", async (e) => {
   const btn = e.target.closest(".fmt__btn");
   if (!btn) return;
@@ -1087,40 +1093,40 @@ fmtMenu.addEventListener("click", async (e) => {
 
   if (cmd === "copy"){
     await cmdCopy();
-    hideFmtMenu();
+    hideFmtMenu(true);
     bodyInput.focus();
     return;
   }
   if (cmd === "paste"){
     await cmdPaste();
-    hideFmtMenu();
+    hideFmtMenu(true);
     bodyInput.focus();
     return;
   }
 
-  // форматирование только если есть выделение в редакторе
+  // форматирование — только при выделении
   if (!(selectionInEditor() && hasSelection())) return;
 
   if (cmd === "spoiler"){
     wrapSelectionWithSpoiler();
-    hideFmtMenu();
+    hideFmtMenu(true);
     bodyInput.focus();
     return;
   }
   if (cmd === "reset"){
     resetFormatting();
-    hideFmtMenu();
+    hideFmtMenu(true);
     bodyInput.focus();
     return;
   }
 
   document.execCommand(cmd);
-  hideFmtMenu();
+  hideFmtMenu(true);
   bodyInput.focus();
 });
 
-// Показ меню: выделение -> полное; без выделения -> только copy/paste
-function openFmtForCurrentState(x, y){
+// ==== показать меню: выделение -> полное, иначе -> copy/paste
+function openFmtAtPoint(x, y){
   const showFormatting = selectionInEditor() && hasSelection();
   if (showFormatting){
     showFmtMenuNearSelection();
@@ -1129,55 +1135,54 @@ function openFmtForCurrentState(x, y){
   }
 }
 
-// ✅ На ПК — правый клик. На мобиле — долгий тап может тоже вызывать contextmenu.
+// ПК/моб: contextmenu (правый клик / долгий тап)
 bodyInput.addEventListener("contextmenu", (e) => {
   e.preventDefault();
-  openFmtForCurrentState(e.clientX, e.clientY);
+  openFmtAtPoint(e.clientX || (window.innerWidth/2), e.clientY || (window.innerHeight/2));
 });
 
-// ✅ Если выделение реально есть (и браузер сам не вызвал contextmenu) — показываем меню
+// если реально есть выделение — показать около выделения
 document.addEventListener("selectionchange", () => {
   if (selectionInEditor() && hasSelection()){
     showFmtMenuNearSelection();
+  } else {
+    // если выделение сняли — скрыть
+    hideFmtMenu(false);
   }
 });
 
-// ====== HARD HIDE (главный фикс) ======
-// На Android бывает, что selectionchange не стреляет при “снял выделение”.
-// Поэтому: если в любой момент НЕТ выделения — скрываем.
-
-function hardHideIfNoSelection(){
-  if (!fmtMenu.hidden && !hasSelection()){
-    hideFmtMenu();
-  }
+// ====== СУПЕР-ЗАКРЫТИЕ: на любое действие, кроме нажатия на само меню ======
+function shouldIgnoreClose(target){
+  return fmtMenu.contains(target);
 }
 
-// 1) Любой тап/клик где угодно (даже в редакторе)
-document.addEventListener("pointerdown", (e) => {
-  if (fmtMenu.hidden) return;
-  if (fmtMenu.contains(e.target)) return; // нажатие на меню — не закрываем
-  hideFmtMenu();
-}, true);
+function hardClose(e){
+  if (fmtMenu.dataset.open !== "1") return;
+  if (shouldIgnoreClose(e?.target)) return;
+  hideFmtMenu(false);
+}
 
-// 2) Отпустил палец/мышь -> если выделения нет — закрыть
-document.addEventListener("pointerup", () => {
-  hardHideIfNoSelection();
-}, true);
+// максимально широкий набор событий (Android-friendly)
+["pointerdown","mousedown","touchstart","click"].forEach(evt => {
+  document.addEventListener(evt, hardClose, true);
+});
 
-// 3) Ввод/клавиатура/композиция (русская клавиатура)
-bodyInput.addEventListener("input", hardHideIfNoSelection, true);
-bodyInput.addEventListener("keyup", hardHideIfNoSelection, true);
-bodyInput.addEventListener("compositionstart", hardHideIfNoSelection, true);
-bodyInput.addEventListener("compositionend", hardHideIfNoSelection, true);
+// ввод/композиция/клавиши
+["input","keyup","keydown","compositionstart","compositionend"].forEach(evt => {
+  bodyInput.addEventListener(evt, () => {
+    // как только нет выделения — закрываем
+    if (!hasSelection()) hideFmtMenu(false);
+  }, true);
+});
 
-// 4) Фокус ушёл на другое поле
+// фокус ушёл на другое поле
 document.addEventListener("focusin", (e) => {
-  if (!bodyInput.contains(e.target)) hideFmtMenu();
+  if (!bodyInput.contains(e.target)) hideFmtMenu(false);
 }, true);
 
-// 5) Скролл/ресайз
-document.addEventListener("scroll", () => hideFmtMenu(), true);
-window.addEventListener("resize", () => hideFmtMenu());
+// скролл/ресайз
+document.addEventListener("scroll", () => hideFmtMenu(false), true);
+window.addEventListener("resize", () => hideFmtMenu(false));
 
 // раскрытие спойлера
 bodyInput.addEventListener("click", (e) => {
