@@ -58,6 +58,9 @@ const modalTitleEl = qs("#modalTitle");
 const modalBodyEl = qs("#modalBody");
 const modalFootEl = qs("#modalFoot");
 
+// icons
+const ICON_EYE = "assets/icons/eye.svg";
+
 // ---------- LocalStorage keys ----------
 const LS = {
   VAULTS: "vaults_index_v1",
@@ -123,6 +126,41 @@ function escapeHtml(s){
 
 function stripHtml(html){
   return String(html || "").replace(/<[^>]+>/g, " ");
+}
+
+// ---------- Note view (modal preview) ----------
+function openNoteView(note){
+  if (!note) return;
+
+  const title = note.title || "Без названия";
+  const type = badgeLabel(note.type);
+  const updated = fmtDate(note.updatedAt || note.createdAt || nowISO());
+
+  openModal({
+    title,
+    bodyHTML: `
+      <div class="noteView">
+        <div class="noteView__meta">
+          <span class="noteView__badge">${escapeHtml(type)}</span>
+          <span class="noteView__date">${escapeHtml(updated)}</span>
+        </div>
+        <div class="noteView__body" id="noteViewBody">${note.bodyHtml || ""}</div>
+      </div>
+    `,
+    footHTML: `
+      <button class="btn btn--ghost" data-close="1">Закрыть</button>
+    `,
+    onMount: () => {
+      // spoilers toggle in preview
+      const box = qs("#noteViewBody");
+      if (!box) return;
+      box.addEventListener("click", (e) => {
+        const sp = e.target.closest(".spoiler");
+        if (!sp) return;
+        sp.classList.toggle("is-revealed");
+      });
+    }
+  });
 }
 
 // ---------- Modal ----------
@@ -422,8 +460,20 @@ function renderList(){
         <div class="item__title">${escapeHtml(it.title || "Без названия")}</div>
         <div class="item__meta">${fmtDate(it.updatedAt || it.createdAt || nowISO())}</div>
       </div>
-      <div class="badge">${escapeHtml(badgeLabel(it.type))}</div>
+      <div class="item__right">
+        <button class="iconMini" type="button" data-view="1" title="Просмотр">
+          <img src="${ICON_EYE}" alt="Просмотр">
+        </button>
+        <div class="badge">${escapeHtml(badgeLabel(it.type))}</div>
+      </div>
     `;
+
+    // preview (eye)
+    el.querySelector('[data-view="1"]').addEventListener("click", (e) => {
+      e.stopPropagation();
+      openNoteView(it);
+    });
+
     el.addEventListener("click", () => {
       state.activeId = it.id;
       renderList();
