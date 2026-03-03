@@ -42,8 +42,8 @@ const statusLine = qs("#statusLine");
 const typeHints = qs("#typeHints");
 const typeFilterDDRoot = qs("#typeFilterDD");
 
-// format menu
-const fmtMenu = qs("#fmtMenu");
+// fixed format bar
+const fmtBar = qs("#fmtBar");
 
 // toast + modal
 const toastEl = qs("#toast");
@@ -84,7 +84,6 @@ function setLocked(locked){
   document.body.classList.toggle("is-locked", locked);
   qs("#topbar").setAttribute("aria-hidden", locked ? "true" : "false");
   qs("#appRoot").setAttribute("aria-hidden", locked ? "true" : "false");
-  hideFmtMenu();
 }
 
 function setStatus(msg){
@@ -927,109 +926,15 @@ function sanitizeHtml(html){
   return root.innerHTML;
 }
 
-// ---------- Rich text: context menu (SUPER HARD FIX) ----------
-function selectionInEditor(){
+// ---------- Fixed format bar (standard browser menu back) ----------
+function hasEditorSelection(){
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return false;
   const range = sel.getRangeAt(0);
+  if (range.collapsed) return false;
   const common = range.commonAncestorContainer;
-  return bodyInput.contains(common.nodeType === 1 ? common : common.parentElement);
-}
-
-function hasSelection(){
-  const sel = window.getSelection();
-  return !!(sel && sel.rangeCount && !sel.getRangeAt(0).collapsed);
-}
-
-function getSelectionRect(){
-  const sel = window.getSelection();
-  if (!sel || !sel.rangeCount) return null;
-  const r = sel.getRangeAt(0).getBoundingClientRect();
-  if (!r) return null;
-  // иногда у выделения ширина/высота 0 — тогда не показываем как "выделение"
-  if (r.width === 0 && r.height === 0) return null;
-  return r;
-}
-
-function setFmtExtraVisible(visible){
-  fmtMenu.querySelectorAll('[data-role="fmt-extra"]').forEach(el => {
-    el.style.display = visible ? "" : "none";
-  });
-}
-
-function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
-
-function hideFmtMenu(forceClearSelection = false){
-  fmtMenu.dataset.open = "0";
-  if (forceClearSelection){
-    try{
-      const sel = window.getSelection();
-      if (sel) sel.removeAllRanges();
-    }catch{}
-  }
-}
-
-function showFmtMenuAt(x, y, showFormatting){
-  setFmtExtraVisible(showFormatting);
-
-  // показать
-  fmtMenu.dataset.open = "1";
-
-  const margin = 8;
-  const desiredTop = y - 44 - 14;
-
-  // грубо
-  fmtMenu.style.left = `${x}px`;
-  fmtMenu.style.top = `${Math.max(margin, desiredTop)}px`;
-
-  // поджать в экран после измерения
-  requestAnimationFrame(() => {
-    if (fmtMenu.dataset.open !== "1") return;
-    const r = fmtMenu.getBoundingClientRect();
-
-    const left = clamp(x - r.width/2, margin, window.innerWidth - r.width - margin);
-    const top  = clamp(desiredTop, margin, window.innerHeight - r.height - margin);
-
-    fmtMenu.style.left = `${left}px`;
-    fmtMenu.style.top  = `${top}px`;
-  });
-}
-
-function showFmtMenuNearSelection(){
-  const rect = getSelectionRect();
-  if (!rect) return;
-  showFmtMenuAt(rect.left + rect.width/2, rect.top, true);
-}
-
-async function cmdCopy(){
-  const sel = window.getSelection();
-  const selected = sel ? sel.toString() : "";
-  try{
-    if (selected){
-      await navigator.clipboard.writeText(selected);
-      toast("Скопировано");
-      return;
-    }
-    // без выделения — копируем всю заметку
-    const it = state.items.find(x => x.id === state.activeId);
-    const all = it ? stripHtml(it.bodyHtml || "") : stripHtml(bodyInput.innerHTML || "");
-    await navigator.clipboard.writeText(all);
-    toast("Скопировано (вся заметка)");
-  }catch{
-    toast("Не удалось скопировать");
-  }
-}
-
-async function cmdPaste(){
-  try{
-    const text = await navigator.clipboard.readText();
-    if (!text) return;
-    bodyInput.focus();
-    document.execCommand("insertText", false, text);
-    toast("Вставлено");
-  }catch{
-    toast("Вставка недоступна");
-  }
+  const node = common.nodeType === 1 ? common : common.parentElement;
+  return !!(node && bodyInput.contains(node));
 }
 
 function unwrapSpoilersInRange(range){
@@ -1049,8 +954,9 @@ function wrapSelectionWithSpoiler(){
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return;
   const range = sel.getRangeAt(0);
-  if (range.collapsed) return;
+  if (range.collapsed){ toast("Выдели текст"); return; }
 
+  // снять вложенные spoilers в выделении
   unwrapSpoilersInRange(range.cloneRange());
 
   const sel2 = window.getSelection();
@@ -1069,122 +975,48 @@ function wrapSelectionWithSpoiler(){
     range2.insertNode(span);
   }
 
-  sel2.removeAllRanges();
-  const nr = document.createRange();
-  nr.selectNodeContents(span);
-  sel2.addRange(nr);
+  bodyInput.focus();
 }
 
 function resetFormatting(){
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return;
-  const range = sel.getRangeAt(0).cloneRange();
+  const range = sel.getRangeAt(0);
+  if (range.collapsed){ toast("Выдели текст"); return; }
 
   document.execCommand("removeFormat");
-  unwrapSpoilersInRange(range);
-}
-
-// ==== клики по меню
-fmtMenu.addEventListener("click", async (e) => {
-  const btn = e.target.closest(".fmt__btn");
-  if (!btn) return;
-
-  const cmd = btn.dataset.cmd;
-
-  if (cmd === "copy"){
-    await cmdCopy();
-    hideFmtMenu(true);
-    bodyInput.focus();
-    return;
-  }
-  if (cmd === "paste"){
-    await cmdPaste();
-    hideFmtMenu(true);
-    bodyInput.focus();
-    return;
-  }
-
-  // форматирование — только при выделении
-  if (!(selectionInEditor() && hasSelection())) return;
-
-  if (cmd === "spoiler"){
-    wrapSelectionWithSpoiler();
-    hideFmtMenu(true);
-    bodyInput.focus();
-    return;
-  }
-  if (cmd === "reset"){
-    resetFormatting();
-    hideFmtMenu(true);
-    bodyInput.focus();
-    return;
-  }
-
-  document.execCommand(cmd);
-  hideFmtMenu(true);
+  unwrapSpoilersInRange(range.cloneRange());
   bodyInput.focus();
-});
-
-// ==== показать меню: выделение -> полное, иначе -> copy/paste
-function openFmtAtPoint(x, y){
-  const showFormatting = selectionInEditor() && hasSelection();
-  if (showFormatting){
-    showFmtMenuNearSelection();
-  } else {
-    showFmtMenuAt(x, y, false);
-  }
 }
 
-// ПК/моб: contextmenu (правый клик / долгий тап)
-bodyInput.addEventListener("contextmenu", (e) => {
-  e.preventDefault();
-  openFmtAtPoint(e.clientX || (window.innerWidth/2), e.clientY || (window.innerHeight/2));
-});
+if (fmtBar){
+  fmtBar.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-cmd]");
+    if (!btn) return;
 
-// если реально есть выделение — показать около выделения
-document.addEventListener("selectionchange", () => {
-  if (selectionInEditor() && hasSelection()){
-    showFmtMenuNearSelection();
-  } else {
-    // если выделение сняли — скрыть
-    hideFmtMenu(false);
-  }
-});
+    bodyInput.focus();
 
-// ====== СУПЕР-ЗАКРЫТИЕ: на любое действие, кроме нажатия на само меню ======
-function shouldIgnoreClose(target){
-  return fmtMenu.contains(target);
+    const cmd = btn.dataset.cmd;
+
+    if (!hasEditorSelection()){
+      toast("Выдели текст");
+      return;
+    }
+
+    if (cmd === "spoiler"){
+      wrapSelectionWithSpoiler();
+      return;
+    }
+    if (cmd === "reset"){
+      resetFormatting();
+      return;
+    }
+
+    document.execCommand(cmd);
+  });
 }
 
-function hardClose(e){
-  if (fmtMenu.dataset.open !== "1") return;
-  if (shouldIgnoreClose(e?.target)) return;
-  hideFmtMenu(false);
-}
-
-// максимально широкий набор событий (Android-friendly)
-["pointerdown","mousedown","touchstart","click"].forEach(evt => {
-  document.addEventListener(evt, hardClose, true);
-});
-
-// ввод/композиция/клавиши
-["input","keyup","keydown","compositionstart","compositionend"].forEach(evt => {
-  bodyInput.addEventListener(evt, () => {
-    // как только нет выделения — закрываем
-    if (!hasSelection()) hideFmtMenu(false);
-  }, true);
-});
-
-// фокус ушёл на другое поле
-document.addEventListener("focusin", (e) => {
-  if (!bodyInput.contains(e.target)) hideFmtMenu(false);
-}, true);
-
-// скролл/ресайз
-document.addEventListener("scroll", () => hideFmtMenu(false), true);
-window.addEventListener("resize", () => hideFmtMenu(false));
-
-// раскрытие спойлера
+// раскрытие спойлера по тапу/клику
 bodyInput.addEventListener("click", (e) => {
   const sp = e.target.closest(".spoiler");
   if (!sp) return;
