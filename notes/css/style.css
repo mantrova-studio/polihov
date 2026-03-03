@@ -441,3 +441,46 @@ body::-webkit-scrollbar-thumb:hover,
   .fmt__btn{ min-width:34px; height:34px; border-radius:10px; }
   .fmt__sep{ height:18px; }
 }
+
+/* ===== Fixed format bar (compact) ===== */
+.fmtBar{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:8px 8px;
+  border-radius: 12px;
+  border:1px solid rgba(43,58,85,.85);
+  background: rgba(30,42,66,.35);
+  backdrop-filter: blur(10px);
+  box-shadow: none;
+  flex-wrap: wrap;
+}
+
+.fmb{
+  min-width:34px;
+  height:30px;
+  padding:0 8px;
+  border-radius:10px;
+  border:1px solid rgba(43,58,85,.85);
+  background: rgba(30,42,66,.55);
+  color:#fff;
+  cursor:pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+.fmb:hover{ background: rgba(36,54,84,.85); border-color: rgba(63,91,135,.9); }
+.fmb:active{ transform: translateY(1px); }
+.fmb--ghost{ opacity:.9; }
+
+.fmbSep{
+  width:1px;
+  height:18px;
+  background: rgba(43,58,85,.85);
+  border-radius: 999px;
+  margin: 0 2px;
+}
+
+@media (max-width: 420px){
+  .fmtBar{ gap:5px; padding:7px; }
+  .fmb{ min-width:32px; height:28px; border-radius:10px; font-size:12px; }
+}
