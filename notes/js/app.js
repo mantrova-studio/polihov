@@ -638,16 +638,6 @@ function openImportVaultModal(){
     title: "Импорт из GitHub",
     bodyHTML: `
       <div class="form">
-        // <div class="hint">
-        //   <span class="dot"></span>
-        //   Импорт подтягивает файл хранилища из репозитория и добавляет его на это устройство.
-        //   После импорта просто выбери хранилище и введи пароль.
-        // </div>
-
-        // <label class="field">
-        //   <span class="field__label">GitHub Token (необязательно для публичного репо)</span>
-        //   <input class="input" id="impToken" type="password" placeholder="ghp_..." value="${escapeHtml(getGhToken())}" />
-        // </label>
 
         <div class="card card--flat mt-10">
           <div class="card__head mb-10">
@@ -659,11 +649,7 @@ function openImportVaultModal(){
           </div>
 
           <div class="impList mt-10" id="impList"></div>
-
-          // <div class="hint mt-10">
-          //   <span class="dot"></span>
-          //   Папка: <span class="mono">${escapeHtml(GH_FILE.baseDir)}</span>
-          // </div>
+          
         </div>
       </div>
     `,
