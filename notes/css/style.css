@@ -364,21 +364,28 @@ body::-webkit-scrollbar-thumb:hover,
 
 .rtxScroll{
   position: relative;
-  max-height: 260px;     /* высота окна текста */
-  overflow: auto;        /* скролл теперь тут */
+  max-height: 260px;
+  overflow: auto;
   border-radius: 12px;
+
+  /* ВАЖНО: делаем 2 колонки внутри одного скролла */
+  display: grid;
+  grid-template-columns: 1fr 52px;
+  gap: 10px;
+
+  padding: 10px; /* общий внутренний отступ */
 }
 
 .rtx{
   width:100%;
-  min-height:260px;      /* чтобы совпадало с max-height */
+  min-height:240px;
   background: rgba(30,42,66,.55);
   border:1px solid rgba(43,58,85,.85);
   color:#fff;
   border-radius:12px;
-  padding:12px 62px 12px 12px; /* место справа под панель */
+  padding:12px;
   outline:none;
-  overflow: visible;     /* без второго скролла */
+  overflow: visible;
   line-height:1.45;
 }
 .rtx:focus{
@@ -421,9 +428,8 @@ body::-webkit-scrollbar-thumb:hover,
 
 .fmtBar--in{
   position: sticky;
-  top: 10px;
-  float: right;
-  margin: 10px 10px 10px 10px;
+  top: 10px;              /* липнет внутри rtxScroll */
+  align-self: start;      /* чтобы не растягивалась по высоте */
 
   display:flex;
   flex-direction: column;
@@ -476,10 +482,13 @@ body::-webkit-scrollbar-thumb:hover,
 }
 
 @media (max-width: 420px){
-  .rtxScroll{ max-height: 240px; }
-  .rtx{ min-height: 240px; padding-right: 58px; }
-  .fmtBar--in{ top: 8px; margin: 8px; padding: 7px 6px; }
-  .fmtBar{ gap:5px; padding:7px; }
-  .fmb{ min-width:32px; height:28px; border-radius:10px; font-size:12px; }
+  .rtxScroll{
+    max-height: 240px;
+    grid-template-columns: 1fr 48px;
+    gap: 8px;
+    padding: 8px;
+  }
+  .rtx{ min-height:220px; }
+  .fmtBar--in{ top: 8px; padding: 7px 6px; }
   .fmtBar--in .fmb{ width: 34px; min-width:34px; height: 30px; }
 }
