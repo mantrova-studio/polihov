@@ -319,7 +319,7 @@ body.is-locked .app{ display:none !important; }
 
 /* ===== Scrollbar (global + widgets) ===== */
 /* Firefox */
-html, body, .list, .rtx{
+html, body, .list, .rtx, .rtxScroll{
   scrollbar-width: thin;
   scrollbar-color: var(--sb-thumb) var(--sb-track);
 }
@@ -327,21 +327,24 @@ html, body, .list, .rtx{
 html::-webkit-scrollbar,
 body::-webkit-scrollbar,
 .list::-webkit-scrollbar,
-.rtx::-webkit-scrollbar{
+.rtx::-webkit-scrollbar,
+.rtxScroll::-webkit-scrollbar{
   width: 8px;
   height: 8px;
 }
 html::-webkit-scrollbar-track,
 body::-webkit-scrollbar-track,
 .list::-webkit-scrollbar-track,
-.rtx::-webkit-scrollbar-track{
+.rtx::-webkit-scrollbar-track,
+.rtxScroll::-webkit-scrollbar-track{
   background: var(--sb-track);
   border-radius: 999px;
 }
 html::-webkit-scrollbar-thumb,
 body::-webkit-scrollbar-thumb,
 .list::-webkit-scrollbar-thumb,
-.rtx::-webkit-scrollbar-thumb{
+.rtx::-webkit-scrollbar-thumb,
+.rtxScroll::-webkit-scrollbar-thumb{
   background: var(--sb-thumb);
   border-radius: 999px;
   border: 2px solid rgba(0,0,0,0);
@@ -350,22 +353,32 @@ body::-webkit-scrollbar-thumb,
 html::-webkit-scrollbar-thumb:hover,
 body::-webkit-scrollbar-thumb:hover,
 .list::-webkit-scrollbar-thumb:hover,
-.rtx::-webkit-scrollbar-thumb:hover{
+.rtx::-webkit-scrollbar-thumb:hover,
+.rtxScroll::-webkit-scrollbar-thumb:hover{
   background: var(--sb-thumb-hover);
   background-clip: padding-box;
 }
 
-/* ===== Rich text editor ===== */
+/* ===== Rich text editor (scroll container for sticky) ===== */
+.rtxWrap{ position: relative; }
+
+.rtxScroll{
+  position: relative;
+  max-height: 260px;     /* высота окна текста */
+  overflow: auto;        /* скролл теперь тут */
+  border-radius: 12px;
+}
+
 .rtx{
   width:100%;
-  min-height:180px;
+  min-height:260px;      /* чтобы совпадало с max-height */
   background: rgba(30,42,66,.55);
   border:1px solid rgba(43,58,85,.85);
   color:#fff;
   border-radius:12px;
-  padding:12px 12px;
+  padding:12px 62px 12px 12px; /* место справа под панель */
   outline:none;
-  overflow:auto;
+  overflow: visible;     /* без второго скролла */
   line-height:1.45;
 }
 .rtx:focus{
@@ -392,7 +405,7 @@ body::-webkit-scrollbar-thumb:hover,
   user-select: text;
 }
 
-/* ===== Fixed format bar (compact) ===== */
+/* ===== Vertical sticky toolbar inside the text field ===== */
 .fmtBar{
   display:flex;
   align-items:center;
@@ -404,6 +417,24 @@ body::-webkit-scrollbar-thumb:hover,
   backdrop-filter: blur(10px);
   box-shadow: none;
   flex-wrap: wrap;
+}
+
+.fmtBar--in{
+  position: sticky;
+  top: 10px;
+  float: right;
+  margin: 10px 10px 10px 10px;
+
+  display:flex;
+  flex-direction: column;
+  gap: 6px;
+
+  padding: 8px 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(43,58,85,.85);
+  background: rgba(18,26,42,.55);
+  backdrop-filter: blur(10px);
+  z-index: 2;
 }
 
 .fmb{
@@ -422,6 +453,15 @@ body::-webkit-scrollbar-thumb:hover,
 .fmb:active{ transform: translateY(1px); }
 .fmb--ghost{ opacity:.9; }
 
+.fmtBar--in .fmb{
+  width: 36px;
+  min-width: 36px;
+  height: 32px;
+  padding: 0;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
 .fmbSep{
   width:1px;
   height:18px;
@@ -429,8 +469,17 @@ body::-webkit-scrollbar-thumb:hover,
   border-radius: 999px;
   margin: 0 2px;
 }
+.fmtBar--in .fmbSep{
+  width: 22px;
+  height: 1px;
+  margin: 4px auto;
+}
 
 @media (max-width: 420px){
+  .rtxScroll{ max-height: 240px; }
+  .rtx{ min-height: 240px; padding-right: 58px; }
+  .fmtBar--in{ top: 8px; margin: 8px; padding: 7px 6px; }
   .fmtBar{ gap:5px; padding:7px; }
   .fmb{ min-width:32px; height:28px; border-radius:10px; font-size:12px; }
+  .fmtBar--in .fmb{ width: 34px; min-width:34px; height: 30px; }
 }
