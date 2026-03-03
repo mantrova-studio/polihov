@@ -873,6 +873,16 @@ function ghPathForVault(vaultId){
   const base = String(GH_FILE.baseDir || "notes/data/vaults").replace(/\/+$/,"");
   return `${base}/${safeId}.json`;
 }
+function ghPathForIndex(){
+  const base = String(GH_FILE.baseDir || "notes/data/vaults").replace(/\/+$/,"");
+  return `${base}/index.json`;
+}
+
+function vaultDisplayNameFromRemote(id, json){
+  const nm = (json && typeof json.name === "string") ? json.name.trim() : "";
+  if (nm) return nm;
+  return `Vault ${String(id).slice(-6)}`;
+}
 async function ghGetFile(token, path){
   const url = `https://api.github.com/repos/${GH_FILE.owner}/${GH_FILE.repo}/contents/${path}?ref=${encodeURIComponent(GH_FILE.branch)}`;
   const res = await fetch(url, { headers: ghApiHeaders(token) });
@@ -905,6 +915,7 @@ async function ghListVaultFiles(token){
   if (!Array.isArray(arr)) return [];
   return arr
     .filter(x => x && x.type === "file" && typeof x.name === "string" && x.name.endsWith(".json"))
+    .filter(x => x.name !== "index.json")
     .map(x => ({
       name: x.name,
       id: x.name.replace(/\.json$/,""),
@@ -943,14 +954,168 @@ async function githubSaveCurrentVault(){
 
   setStatus("GitHub: сохранение…");
 
+  // 1) сохраняем локально (шифрованный blob)
   const blob = await saveVaultDataLocal();
 
+  // 2) формируем удалённый файл хранилища (добавляем имя/метаданные)
+  const vaults = loadVaults();
+  const v = vaults.find(x => x.id === state.vaultId);
+  const payload = {
+    ...blob,
+    id: state.vaultId,
+    name: v ? v.name : `Vault ${String(state.vaultId).slice(-6)}`,
+    updatedAt: nowISO()
+  };
+
+  // 3) пишем файл хранилища
   const path = ghPathForVault(state.vaultId);
   const remote = await ghGetFile(token, path);
-  await ghPutFile(token, path, blob, remote.sha || undefined);
+  await ghPutFile(token, path, payload, remote.sha || undefined);
+
+  // 4) обновляем индекс (для автоподгрузки названий на других устройствах)
+  try{
+    const idxPath = ghPathForIndex();
+    const idxRemote = await ghGetFileJson(token, idxPath);
+    const nextIdx = (idxRemote.exists && idxRemote.json && typeof idxRemote.json === "object")
+      ? idxRemote.json
+      : { v: 1, updatedAt: nowISO(), vaults: [] };
+
+    if (!Array.isArray(nextIdx.vaults)) nextIdx.vaults = [];
+    const i = nextIdx.vaults.findIndex(x => x && x.id === state.vaultId);
+    const item = { id: state.vaultId, name: payload.name, updatedAt: payload.updatedAt };
+    if (i >= 0) nextIdx.vaults[i] = { ...nextIdx.vaults[i], ...item };
+    else nextIdx.vaults.unshift(item);
+    nextIdx.updatedAt = nowISO();
+
+    await ghPutFile(token, idxPath, nextIdx, idxRemote.sha || undefined);
+  }catch(e){
+    // индекс — удобство, но не критичная ошибка
+    console.warn("Index update failed", e);
+  }
 
   setStatus(`GitHub: сохранено ✅`);
   toast("Сохранено в GitHub");
+}
+
+
+
+// ---------- Auto sync (GitHub -> local registry) ----------
+async function githubAutoSyncVaults(){
+  // Пытаемся подтянуть список хранилищ и их названия автоматически.
+  // Работает:
+  // - с токеном (частные репо/без лимитов)
+  // - без токена (публичные репо, может упереться в лимит GitHub API)
+  const token = getGhToken() || null;
+
+  try{
+    // 1) пробуем индекс (быстрее и сразу с названиями)
+    const idxPath = ghPathForIndex();
+    const idx = await ghGetFileJson(token, idxPath);
+    if (idx.exists && idx.json && Array.isArray(idx.json.vaults)){
+      mergeRemoteVaultIndex(idx.json.vaults);
+      return true;
+    }
+  }catch(e){
+    // игнор, попробуем fallback
+    console.warn("Index load failed", e);
+  }
+
+  try{
+    // 2) fallback: список файлов + чтение каждого файла (медленнее)
+    const files = await ghListVaultFiles(token);
+    if (!files.length) return false;
+
+    const vaults = loadVaults();
+    let changed = false;
+
+    for (const f of files){
+      try{
+        const res = await ghGetFileJson(token, f.path);
+        if (!res.exists || !res.json) continue;
+
+        const name = vaultDisplayNameFromRemote(f.id, res.json);
+
+        const ex = vaults.find(x => x.id === f.id);
+        if (ex){
+          if (name && ex.name !== name){ ex.name = name; changed = true; }
+          ex.updatedAt = res.json.updatedAt || ex.updatedAt || nowISO();
+        }else{
+          vaults.unshift({
+            id: f.id,
+            name,
+            createdAt: res.json.createdAt || nowISO(),
+            updatedAt: res.json.updatedAt || nowISO()
+          });
+          changed = true;
+        }
+      }catch(e){
+        console.warn("Vault meta load failed", f?.id, e);
+      }
+    }
+
+    if (changed) saveVaults(vaults);
+    return changed;
+  }catch(e){
+    console.warn("List failed", e);
+    return false;
+  }
+}
+
+function mergeRemoteVaultIndex(remoteVaults){
+  const vaults = loadVaults();
+  let changed = false;
+
+  for (const rv of remoteVaults){
+    if (!rv || !rv.id) continue;
+    const id = String(rv.id);
+    const name = (typeof rv.name === "string" && rv.name.trim()) ? rv.name.trim() : `Vault ${id.slice(-6)}`;
+
+    const ex = vaults.find(x => x.id === id);
+    if (ex){
+      if (name && ex.name !== name){ ex.name = name; changed = true; }
+      if (rv.updatedAt && ex.updatedAt !== rv.updatedAt){ ex.updatedAt = rv.updatedAt; changed = true; }
+    }else{
+      vaults.unshift({
+        id,
+        name,
+        createdAt: nowISO(),
+        updatedAt: rv.updatedAt || nowISO()
+      });
+      changed = true;
+    }
+  }
+
+  if (changed) saveVaults(vaults);
+}
+
+async function ensureVaultBlobFromGithub(vaultId){
+  if (!vaultId) return false;
+  if (hasBlob(vaultId)) return true;
+
+  const token = getGhToken();
+  if (!token) throw new Error("no github token");
+
+  const path = ghPathForVault(vaultId);
+  const res = await ghGetFileJson(token, path);
+  if (!res.exists || !res.json) return false;
+
+  // сохраняем blob (в файле могут быть лишние поля — они не мешают unlock)
+  saveBlob(vaultId, res.json);
+
+  // обновим имя из удалённого файла (если там уже лежит name)
+  const vaults = loadVaults();
+  const ex = vaults.find(x => x.id === vaultId);
+  const name = vaultDisplayNameFromRemote(vaultId, res.json);
+  if (ex){
+    if (name && ex.name !== name) ex.name = name;
+    ex.updatedAt = res.json.updatedAt || ex.updatedAt || nowISO();
+    saveVaults(vaults);
+  }else{
+    vaults.unshift({ id: vaultId, name, createdAt: nowISO(), updatedAt: res.json.updatedAt || nowISO() });
+    saveVaults(vaults);
+  }
+
+  return true;
 }
 
 // ---------- Lock/Unlock ----------
@@ -964,6 +1129,15 @@ function lockHard(msg){
 
 async function unlockSelectedVault(password){
   if (!selectedVaultId) throw new Error("no vault selected");
+
+  // если на этом устройстве blob ещё не сохранён — пробуем автоматически подтянуть из GitHub
+  if (!hasBlob(selectedVaultId)){
+    try{
+      await ensureVaultBlobFromGithub(selectedVaultId);
+    }catch(e){
+      console.warn("Auto download failed", e);
+    }
+  }
   if (!hasBlob(selectedVaultId)) throw new Error("vault blob missing");
 
   const { key, payload } = await unlockVaultBlob(selectedVaultId, password);
@@ -1256,10 +1430,14 @@ bodyInput.addEventListener("click", (e) => {
 });
 
 // ---------- Boot ----------
-(function boot(){
+(async function boot(){
   setLocked(true);
   rememberCheck.checked = isRememberSelected();
   renderVaultSelectDropdown();
+
+  // Автоподгрузка списка хранилищ с GitHub (если доступно)
+  const changed = await githubAutoSyncVaults();
+  if (changed) renderVaultSelectDropdown();
 
   const vaults = loadVaults();
   if (vaults.length === 0){
