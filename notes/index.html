@@ -125,21 +125,26 @@
             </div>
           </div>
 
-          <!-- FIXED FORMAT BAR -->
-          <div class="fmtBar" id="fmtBar">
-            <button class="fmb" data-cmd="bold" title="Жирный"><b>B</b></button>
-            <button class="fmb" data-cmd="italic" title="Курсив"><i>I</i></button>
-            <button class="fmb" data-cmd="underline" title="Подчеркнуть"><u>U</u></button>
-            <button class="fmb" data-cmd="strikeThrough" title="Зачеркнуть"><s>S</s></button>
-            <span class="fmbSep"></span>
-            <button class="fmb" data-cmd="spoiler" title="Спойлер">▧</button>
-            <button class="fmb fmb--ghost" data-cmd="reset" title="Обычный">Aa</button>
-          </div>
-
+          <!-- TEXT (sticky toolbar inside) -->
           <label class="field">
             <span class="field__label">Текст</span>
-            <div class="rtx" id="bodyInput" contenteditable="true" spellcheck="false"
-                 data-placeholder="Логины, пароли, ссылки, чек-листы…"></div>
+
+            <div class="rtxWrap" id="rtxWrap">
+              <div class="rtxScroll" id="rtxScroll">
+                <div class="rtx" id="bodyInput" contenteditable="true" spellcheck="false"
+                     data-placeholder="Логины, пароли, ссылки, чек-листы…"></div>
+
+                <div class="fmtBar fmtBar--in" id="fmtBar" aria-label="Форматирование">
+                  <button class="fmb" data-cmd="bold" title="Жирный"><b>B</b></button>
+                  <button class="fmb" data-cmd="italic" title="Курсив"><i>I</i></button>
+                  <button class="fmb" data-cmd="underline" title="Подчеркнуть"><u>U</u></button>
+                  <button class="fmb" data-cmd="strikeThrough" title="Зачеркнуть"><s>S</s></button>
+                  <span class="fmbSep"></span>
+                  <button class="fmb" data-cmd="spoiler" title="Спойлер">▧</button>
+                  <button class="fmb fmb--ghost" data-cmd="reset" title="Обычный">Aa</button>
+                </div>
+              </div>
+            </div>
           </label>
 
           <div class="row">
