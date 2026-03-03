@@ -64,13 +64,17 @@ const ICON_EYE = "assets/icons/eye.svg";
 
 // ---------- LocalStorage keys ----------
 const LS = {
-  VAULTS: "vaults_index_v1",
+  VAULTS: "vaults_index_v1",          // [{id,name,createdAt,updatedAt,fileName?}]
   ACTIVE: "vault_active_v1",
   REMEMBER: "vault_remember_v1",
   GH_TOKEN: "vault_github_token_v1",
 };
 
 const blobKey = (id) => `vault_blob_${id}`;
+
+// ---------- GitHub paths ----------
+const ghBaseDir = () => String(GH_FILE.baseDir || "notes/data/vaults").replace(/\/+$/,"");
+const ghIndexPath = () => `${ghBaseDir()}/index.json`;
 
 // ---------- State ----------
 let state = {
@@ -323,6 +327,17 @@ function loadVaults(){
 }
 function saveVaults(arr){
   localStorage.setItem(LS.VAULTS, JSON.stringify(arr));
+}
+function getVaultMeta(id){
+  const vaults = loadVaults();
+  return vaults.find(v => v.id === id) || null;
+}
+function upsertVaultMeta(meta){
+  const vaults = loadVaults();
+  const i = vaults.findIndex(v => v.id === meta.id);
+  if (i >= 0) vaults[i] = { ...vaults[i], ...meta };
+  else vaults.unshift(meta);
+  saveVaults(vaults);
 }
 function getActiveVaultId(){
   return localStorage.getItem(LS.ACTIVE) || null;
@@ -616,28 +631,9 @@ function openImportVaultModal(){
           <input class="input" id="impToken" type="password" placeholder="ghp_..." value="${escapeHtml(getGhToken())}" />
         </label>
 
-        <div class="card card--flat mt-8">
-          <div class="card__head mb-10">
-            <div class="muted sectionLabel">Импорт по ID</div>
-          </div>
-
-          <label class="field">
-            <span class="field__label">Vault ID (пример: v_abcd1234...)</span>
-            <input class="input" id="impVaultId" type="text" placeholder="v_..." />
-            <div class="hint mt-8">
-              <span class="dot"></span>
-              ID виден на главном экране после входа (строка «ID: …») или в названии файла в репозитории.
-            </div>
-          </label>
-
-          <div class="row">
-            <button class="btn btn--primary" id="impDoById" type="button">Импортировать</button>
-          </div>
-        </div>
-
         <div class="card card--flat mt-10">
           <div class="card__head mb-10">
-            <div class="muted sectionLabel">Список файлов в репозитории</div>
+            <div class="muted sectionLabel">Список хранилищ (index.json)</div>
           </div>
 
           <div class="row">
@@ -660,13 +656,6 @@ function openImportVaultModal(){
       const tokenEl = qs("#impToken");
       const saveToken = () => setGhToken((tokenEl.value || "").trim());
 
-      qs("#impDoById").addEventListener("click", async () => {
-        saveToken();
-        const id = (qs("#impVaultId").value || "").trim();
-        if (!id){ toast("Укажи Vault ID"); return; }
-        await importVaultById(id);
-      });
-
       qs("#impLoadList").addEventListener("click", async () => {
         saveToken();
         await importListAndRender();
@@ -680,16 +669,17 @@ function openImportVaultModal(){
 
     try{
       const token = getGhToken();
-      const files = await ghListVaultFiles(token);
-      if (!files.length){
-        listEl.innerHTML = `<div class="muted">Файлы не найдены</div>`;
+      const index = await ghGetIndex(token);
+      if (!index.length){
+        listEl.innerHTML = `<div class="muted">index.json не найден или пустой</div>`;
         return;
       }
 
-      listEl.innerHTML = files.map(f => `
-        <button class="impItem" type="button" data-id="${escapeHtml(f.id)}">
-          <span class="mono">${escapeHtml(f.id)}</span>
-          <span class="muted">(${escapeHtml(f.name)})</span>
+      listEl.innerHTML = index.map(v => `
+        <button class="impItem" type="button" data-id="${escapeHtml(v.id)}">
+          ${escapeHtml(v.name || "Vault")}
+          <span class="muted">·</span>
+          <span class="mono">${escapeHtml(v.fileName || "")}</span>
         </button>
       `).join("");
 
@@ -710,7 +700,13 @@ function openImportVaultModal(){
   async function importVaultById(vaultId){
     try{
       const token = getGhToken();
-      const path = ghPathForVault(vaultId);
+      const meta = await ensureVaultMetaFromRemote(vaultId, token);
+      if (!meta?.fileName){
+        toast("Не удалось определить файл хранилища");
+        return;
+      }
+
+      const path = ghPathForFileName(meta.fileName);
       const res = await ghGetFileJson(token, path);
       if (!res.exists || !res.json){
         toast("Файл хранилища не найден");
@@ -719,16 +715,13 @@ function openImportVaultModal(){
 
       saveBlob(vaultId, res.json);
 
-      const vaults = loadVaults();
-      if (!vaults.find(v => v.id === vaultId)){
-        vaults.unshift({
-          id: vaultId,
-          name: `Vault ${vaultId.slice(-6)}`,
-          createdAt: nowISO(),
-          updatedAt: nowISO()
-        });
-        saveVaults(vaults);
-      }
+      upsertVaultMeta({
+        id: vaultId,
+        name: meta.name || `Vault ${vaultId.slice(-6)}`,
+        fileName: meta.fileName,
+        createdAt: meta.createdAt || nowISO(),
+        updatedAt: nowISO()
+      });
 
       selectedVaultId = vaultId;
       if (isRememberSelected()) setActiveVaultId(vaultId);
@@ -742,6 +735,7 @@ function openImportVaultModal(){
     }
   }
 }
+
 // ---------- Settings ----------
 function getGhToken(){
   return (localStorage.getItem(LS.GH_TOKEN) || "").trim();
@@ -830,7 +824,7 @@ function openSettingsModal(){
         activeVaultSub.textContent = `ID: ${state.vaultId}`;
         renderVaultSelectDropdown();
 
-        toast("Переименовано");
+        toast("Переименовано (файл на GitHub обновится при следующем «Сохранить в GitHub»)");
       });
 
       qs("#stDelete").addEventListener("click", async () => {
@@ -861,18 +855,61 @@ function openSettingsModal(){
   });
 }
 
-// ---------- GitHub save ----------
+/* =========================================================================
+   ✅ Улучшение: имя файла на GitHub = название хранилища (а не vaultId)
+   - В GitHub кладём: notes/data/vaults/<slug(название)>.json
+   - Чтобы не было конфликтов одинаковых названий, ведём index.json:
+       [{ id, name, fileName, createdAt, updatedAt }]
+   - При автоподгрузке/логине ищем fileName через index.json.
+   ========================================================================= */
+
+// ---------- Slugify (RU -> latin) ----------
+function translitRuToLat(s){
+  const m = {
+    "а":"a","б":"b","в":"v","г":"g","д":"d","е":"e","ё":"e","ж":"zh","з":"z","и":"i","й":"y",
+    "к":"k","л":"l","м":"m","н":"n","о":"o","п":"p","р":"r","с":"s","т":"t","у":"u","ф":"f",
+    "х":"h","ц":"ts","ч":"ch","ш":"sh","щ":"sch","ъ":"","ы":"y","ь":"","э":"e","ю":"yu","я":"ya"
+  };
+  return String(s || "")
+    .split("")
+    .map(ch => {
+      const low = ch.toLowerCase();
+      if (m[low] !== undefined) return (ch === low) ? m[low] : (m[low].charAt(0).toUpperCase() + m[low].slice(1));
+      return ch;
+    })
+    .join("");
+}
+
+function slugifyName(name){
+  const raw = translitRuToLat(String(name || "").trim());
+  let slug = raw
+    .toLowerCase()
+    .replace(/['"`]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  if (!slug) slug = "vault";
+  return slug;
+}
+
+function fileNameFromVaultName(name){
+  return `${slugifyName(name)}.json`;
+}
+
+function ghPathForFileName(fileName){
+  const base = ghBaseDir();
+  const safe = String(fileName || "").replace(/\/+/g, "_");
+  return `${base}/${safe}`;
+}
+
+// ---------- GitHub helpers ----------
 function ghApiHeaders(token){
   return {
     "Accept": "application/vnd.github+json",
     "Authorization": `Bearer ${token}`
   };
 }
-function ghPathForVault(vaultId){
-  const safeId = String(vaultId).replace(/[^\w\-]/g, "_");
-  const base = String(GH_FILE.baseDir || "notes/data/vaults").replace(/\/+$/,"");
-  return `${base}/${safeId}.json`;
-}
+
 async function ghGetFile(token, path){
   const url = `https://api.github.com/repos/${GH_FILE.owner}/${GH_FILE.repo}/contents/${path}?ref=${encodeURIComponent(GH_FILE.branch)}`;
   const res = await fetch(url, { headers: ghApiHeaders(token) });
@@ -894,27 +931,10 @@ async function ghGetFileJson(token, path){
   return { exists:true, json, sha:data.sha };
 }
 
-async function ghListVaultFiles(token){
-  const base = String(GH_FILE.baseDir || "notes/data/vaults").replace(/\/+$/,"");
-  const url = `https://api.github.com/repos/${GH_FILE.owner}/${GH_FILE.repo}/contents/${base}?ref=${encodeURIComponent(GH_FILE.branch)}`;
-  const headers = token ? ghApiHeaders(token) : { "Accept":"application/vnd.github+json" };
-  const res = await fetch(url, { headers });
-  if (res.status === 404) return [];
-  if (!res.ok) throw new Error(`GitHub LIST failed: ${res.status}`);
-  const arr = await res.json();
-  if (!Array.isArray(arr)) return [];
-  return arr
-    .filter(x => x && x.type === "file" && typeof x.name === "string" && x.name.endsWith(".json"))
-    .map(x => ({
-      name: x.name,
-      id: x.name.replace(/\.json$/,""),
-      path: x.path
-    }));
-}
-async function ghPutFile(token, path, json, sha){
+async function ghPutFile(token, path, json, sha, message="vault: save"){
   const url = `https://api.github.com/repos/${GH_FILE.owner}/${GH_FILE.repo}/contents/${path}`;
   const body = {
-    message: "vault: save",
+    message,
     content: btoa(unescape(encodeURIComponent(JSON.stringify(json, null, 2)))),
     branch: GH_FILE.branch
   };
@@ -929,6 +949,97 @@ async function ghPutFile(token, path, json, sha){
   return await res.json();
 }
 
+async function ghDeleteFile(token, path, sha, message="vault: delete old file"){
+  if (!token || !sha) return false;
+  const url = `https://api.github.com/repos/${GH_FILE.owner}/${GH_FILE.repo}/contents/${path}`;
+  const body = { message, sha, branch: GH_FILE.branch };
+  const res = await fetch(url, {
+    method: "DELETE",
+    headers: { ...ghApiHeaders(token), "Content-Type":"application/json" },
+    body: JSON.stringify(body)
+  });
+  return res.ok;
+}
+
+// ---------- Raw fetch JSON (public repo) ----------
+async function ghGetRawJson(path){
+  const url = `https://raw.githubusercontent.com/${GH_FILE.owner}/${GH_FILE.repo}/${GH_FILE.branch}/${path}?cb=${Date.now()}`;
+  const res = await fetch(url, { cache:"no-store" });
+  if (!res.ok) return null;
+  return await res.json();
+}
+
+// ---------- Index.json (remote registry) ----------
+async function ghGetIndex(token){
+  // 1) raw (public)
+  try{
+    const j = await ghGetRawJson(ghIndexPath());
+    if (Array.isArray(j)) return j;
+  }catch{}
+
+  // 2) api (token optional, but useful for rate limits/private)
+  try{
+    const r = await ghGetFileJson(token, ghIndexPath());
+    if (r.exists && Array.isArray(r.json)) return r.json;
+  }catch{}
+
+  return [];
+}
+
+function mergeRemoteIndexToLocal(indexArr){
+  if (!Array.isArray(indexArr) || indexArr.length === 0) return;
+
+  const local = loadVaults();
+  const map = new Map(local.map(v => [v.id, v]));
+
+  for (const it of indexArr){
+    if (!it || !it.id) continue;
+    const prev = map.get(it.id) || {};
+    map.set(it.id, {
+      ...prev,
+      id: it.id,
+      name: it.name || prev.name || `Vault ${String(it.id).slice(-6)}`,
+      fileName: it.fileName || prev.fileName,
+      createdAt: it.createdAt || prev.createdAt || nowISO(),
+      updatedAt: it.updatedAt || prev.updatedAt || nowISO(),
+    });
+  }
+
+  // стабильный порядок: новые сверху
+  const merged = [...map.values()].sort((a,b) => (b.updatedAt||"").localeCompare(a.updatedAt||""));
+  saveVaults(merged);
+}
+
+function makeUniqueFileName(desired, takenSet){
+  if (!takenSet.has(desired)) return desired;
+  const base = desired.replace(/\.json$/,"");
+  let n = 2;
+  while (takenSet.has(`${base}-${n}.json`)) n++;
+  return `${base}-${n}.json`;
+}
+
+async function ensureVaultMetaFromRemote(vaultId, token){
+  // if local already has fileName, ok
+  const local = getVaultMeta(vaultId);
+  if (local?.fileName) return local;
+
+  const index = await ghGetIndex(token);
+  const found = index.find(x => x && x.id === vaultId) || null;
+  if (found){
+    upsertVaultMeta({
+      id: found.id,
+      name: found.name || local?.name || `Vault ${vaultId.slice(-6)}`,
+      fileName: found.fileName,
+      createdAt: found.createdAt || local?.createdAt || nowISO(),
+      updatedAt: found.updatedAt || local?.updatedAt || nowISO()
+    });
+    return getVaultMeta(vaultId);
+  }
+
+  return local;
+}
+
+// ---------- GitHub save (vault file + index.json) ----------
 async function githubSaveCurrentVault(){
   const token = getGhToken();
   if (!token){
@@ -945,9 +1056,60 @@ async function githubSaveCurrentVault(){
 
   const blob = await saveVaultDataLocal();
 
-  const path = ghPathForVault(state.vaultId);
-  const remote = await ghGetFile(token, path);
-  await ghPutFile(token, path, blob, remote.sha || undefined);
+  // 1) определяем имя файла из названия
+  const localMeta = getVaultMeta(state.vaultId) || { id: state.vaultId, name: "Vault", createdAt: nowISO(), updatedAt: nowISO() };
+  const desiredFile = fileNameFromVaultName(localMeta.name || "Vault");
+
+  // 2) берём index.json, чтобы:
+  //   - понять, какие fileName уже заняты
+  //   - сохранить mapping id -> fileName
+  const remoteIndex = await ghGetIndex(token);
+  const taken = new Set(remoteIndex.map(x => x?.fileName).filter(Boolean));
+  const finalFile = makeUniqueFileName(desiredFile, taken);
+
+  // 3) сохраняем vault-файл
+  const newPath = ghPathForFileName(finalFile);
+  const remoteFile = await ghGetFile(token, newPath);
+  await ghPutFile(token, newPath, blob, remoteFile.sha || undefined, "vault: save");
+
+  // 4) если раньше был другой файл — попробуем удалить старый (не критично)
+  if (localMeta.fileName && localMeta.fileName !== finalFile){
+    try{
+      const oldPath = ghPathForFileName(localMeta.fileName);
+      const oldRemote = await ghGetFile(token, oldPath);
+      if (oldRemote.exists && oldRemote.sha){
+        await ghDeleteFile(token, oldPath, oldRemote.sha, "vault: rename (delete old)");
+      }
+    }catch{}
+  }
+
+  // 5) обновляем локальный meta
+  upsertVaultMeta({
+    id: state.vaultId,
+    name: localMeta.name || "Vault",
+    fileName: finalFile,
+    updatedAt: nowISO(),
+    createdAt: localMeta.createdAt || nowISO()
+  });
+
+  // 6) обновляем index.json на GitHub
+  const nextIndex = (() => {
+    const map = new Map(Array.isArray(remoteIndex) ? remoteIndex.filter(Boolean).map(v => [v.id, v]) : []);
+    const prev = map.get(state.vaultId) || {};
+    map.set(state.vaultId, {
+      ...prev,
+      id: state.vaultId,
+      name: localMeta.name || prev.name || "Vault",
+      fileName: finalFile,
+      createdAt: prev.createdAt || localMeta.createdAt || nowISO(),
+      updatedAt: nowISO()
+    });
+    return [...map.values()].sort((a,b) => (b.updatedAt||"").localeCompare(a.updatedAt||""));
+  })();
+
+  const idxPath = ghIndexPath();
+  const idxRemote = await ghGetFile(token, idxPath);
+  await ghPutFile(token, idxPath, nextIndex, idxRemote.sha || undefined, "vault: update index");
 
   setStatus(`GitHub: сохранено ✅`);
   toast("Сохранено в GitHub");
@@ -966,30 +1128,54 @@ async function ensureVaultBlob(vaultId){
   if (!vaultId) return false;
   if (hasBlob(vaultId)) return true;
 
+  // 0) подтянуть meta (fileName) из index.json, если локально нет
+  await ensureVaultMetaFromRemote(vaultId, getGhToken());
+
+  const meta = getVaultMeta(vaultId);
+
   // 1) Try public raw file (works for public repos, no token needed)
-  try{
-    const base = String(GH_FILE.baseDir || "notes/data/vaults").replace(/\/+$/,"");
-    const url = `https://raw.githubusercontent.com/${GH_FILE.owner}/${GH_FILE.repo}/${GH_FILE.branch}/${base}/${encodeURIComponent(vaultId)}.json?cb=${Date.now()}`;
-    const res = await fetch(url, { cache:"no-store" });
-    if (res.ok){
-      const json = await res.json();
+  //    сначала по fileName (новая схема), потом legacy по id.json (на случай старых файлов)
+  const tryRaw = async (path) => {
+    try{
+      const json = await ghGetRawJson(path);
       if (json && typeof json === "object"){
         saveBlob(vaultId, json);
         return true;
       }
-    }
-  }catch(e){
-    console.warn("ensureVaultBlob raw failed", e);
+    }catch{}
+    return false;
+  };
+
+  if (meta?.fileName){
+    const ok = await tryRaw(ghPathForFileName(meta.fileName));
+    if (ok) return true;
+  }
+
+  // legacy fallback: <id>.json (если вдруг остались старые файлы)
+  {
+    const legacy = `${ghBaseDir()}/${encodeURIComponent(vaultId)}.json`;
+    const ok = await tryRaw(legacy);
+    if (ok) return true;
   }
 
   // 2) Fallback: GitHub API (requires token for private repos / rate limits)
   try{
     const token = getGhToken();
     if (token){
-      const path = ghPathForVault(vaultId);
-      const r = await ghGetFileJson(token, path);
-      if (r.exists && r.json){
-        saveBlob(vaultId, r.json);
+      if (meta?.fileName){
+        const path = ghPathForFileName(meta.fileName);
+        const r = await ghGetFileJson(token, path);
+        if (r.exists && r.json){
+          saveBlob(vaultId, r.json);
+          return true;
+        }
+      }
+
+      // legacy fallback API
+      const legacyPath = `${ghBaseDir()}/${String(vaultId).replace(/[^\w\-]/g, "_")}.json`;
+      const r2 = await ghGetFileJson(token, legacyPath);
+      if (r2.exists && r2.json){
+        saveBlob(vaultId, r2.json);
         return true;
       }
     }
@@ -1018,8 +1204,7 @@ async function unlockSelectedVault(password){
   state.activeId = state.items[0]?.id ?? null;
   state.filterType = "all";
 
-  const vaults = loadVaults();
-  const v = vaults.find(x => x.id === selectedVaultId);
+  const v = getVaultMeta(selectedVaultId);
   activeVaultTitle.textContent = v ? v.name : "Vault";
   activeVaultSub.textContent = `ID: ${selectedVaultId}`;
 
@@ -1294,9 +1479,16 @@ bodyInput.addEventListener("click", (e) => {
 });
 
 // ---------- Boot ----------
-(function boot(){
+(async function boot(){
   setLocked(true);
   rememberCheck.checked = isRememberSelected();
+
+  // ✅ автоподтянуть названия/имена файлов из index.json (публично или через token)
+  try{
+    const idx = await ghGetIndex(getGhToken());
+    mergeRemoteIndexToLocal(idx);
+  }catch{}
+
   renderVaultSelectDropdown();
 
   const vaults = loadVaults();
