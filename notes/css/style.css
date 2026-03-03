@@ -392,56 +392,6 @@ body::-webkit-scrollbar-thumb:hover,
   user-select: text;
 }
 
-/* ===== Format menu (SUPER HARD HIDE) ===== */
-.fmt{
-  position: fixed;
-  z-index: 9998;
-
-  /* главное: по умолчанию скрыто */
-  display: none !important;
-
-  align-items:center;
-  gap:8px;
-  padding:8px;
-  border-radius: 12px;
-  background: rgba(18,26,42,.96);
-  border:1px solid rgba(43,58,85,.85);
-  box-shadow: none;
-  backdrop-filter: blur(10px);
-
-  max-width: calc(100vw - 16px);
-  flex-wrap: wrap;
-}
-
-.fmt[data-open="1"]{
-  display: flex !important;
-}
-
-.fmt__sep{
-  width:1px;
-  height:22px;
-  background: rgba(43,58,85,.85);
-  border-radius: 999px;
-  margin: 0 2px;
-}
-.fmt__btn{
-  min-width:40px;
-  height:36px;
-  border-radius: 10px;
-  border:1px solid rgba(43,58,85,.85);
-  background: rgba(30,42,66,.55);
-  color:#fff;
-  cursor:pointer;
-}
-.fmt__btn:hover{ background: rgba(36,54,84,.85); border-color: rgba(63,91,135,.9); }
-.fmt__btn--ghost{ opacity:.9; }
-
-@media (max-width: 420px){
-  .fmt{ gap:6px; padding:6px; border-radius: 12px; }
-  .fmt__btn{ min-width:34px; height:34px; border-radius:10px; }
-  .fmt__sep{ height:18px; }
-}
-
 /* ===== Fixed format bar (compact) ===== */
 .fmtBar{
   display:flex;
