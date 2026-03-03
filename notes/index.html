@@ -132,8 +132,12 @@
             </div>
           </div>
 
-          <!-- TEXT (sticky toolbar inside) -->
-          <label class="field">
+          <!-- TEXT (sticky toolbar inside)
+               NOTE: раньше здесь был <label>. Это ломало поведение клика по contenteditable,
+               потому что label «активирует» первый labelable-элемент внутри (кнопку Bold).
+               Теперь это обычный <div class="field">, чтобы клик по редактору НЕ нажимал кнопку.
+          -->
+          <div class="field">
             <span class="field__label">Текст</span>
 
             <div class="rtxWrap" id="rtxWrap">
@@ -142,17 +146,17 @@
        data-placeholder="Логины, пароли, ссылки, чек-листы…"></div>
 
   <div class="fmtBar fmtBar--in" id="fmtBar" aria-label="Форматирование">
-    <button class="fmb" data-cmd="bold" title="Жирный"><b>B</b></button>
-    <button class="fmb" data-cmd="italic" title="Курсив"><i>I</i></button>
-    <button class="fmb" data-cmd="underline" title="Подчеркнуть"><u>U</u></button>
-    <button class="fmb" data-cmd="strikeThrough" title="Зачеркнуть"><s>S</s></button>
+    <button class="fmb" type="button" data-cmd="bold" title="Жирный"><b>B</b></button>
+    <button class="fmb" type="button" data-cmd="italic" title="Курсив"><i>I</i></button>
+    <button class="fmb" type="button" data-cmd="underline" title="Подчеркнуть"><u>U</u></button>
+    <button class="fmb" type="button" data-cmd="strikeThrough" title="Зачеркнуть"><s>S</s></button>
     <span class="fmbSep"></span>
-    <button class="fmb" data-cmd="spoiler" title="Спойлер">▧</button>
-    <button class="fmb fmb--ghost" data-cmd="reset" title="Обычный">Aa</button>
+    <button class="fmb" type="button" data-cmd="spoiler" title="Спойлер">▧</button>
+    <button class="fmb fmb--ghost" type="button" data-cmd="reset" title="Обычный">Aa</button>
   </div>
 </div>
             </div>
-          </label>
+          </div>
 
           <div class="row">
             <button class="btn btn--primary" id="applyBtn" type="submit">Применить</button>
