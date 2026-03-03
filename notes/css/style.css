@@ -315,24 +315,41 @@ body.is-locked .app{ display:none !important; }
 /* modal */
 .modal{ position:fixed; inset:0; z-index:80; }
 .modal__overlay{ position:absolute; inset:0; background:rgba(0,0,0,.55); backdrop-filter: blur(6px); }
+
+/* ✅ ОБНОВЛЕНО: модалка теперь не “уезжает” вниз — скролл внутри тела */
 .modal__panel{
   position:relative;
   width:min(720px, 92vw);
   margin: 8vh auto 0;
+
   background: rgba(18,26,42,.96);
   border:1px solid rgba(43,58,85,.85);
   border-radius: 14px;
   box-shadow: var(--shadow);
   backdrop-filter: blur(10px);
+
+  /* важно: ограничиваем высоту и делаем “шапка/тело/низ” как колонки */
+  max-height: 84vh;
+  display:flex;
+  flex-direction: column;
+
   overflow:hidden;
 }
+
 .modal__head{
   display:flex; align-items:center; justify-content:space-between;
   padding:14px 14px;
   border-bottom:1px solid rgba(43,58,85,.55);
 }
 .modal__title{ font-weight:800; letter-spacing:.06em; text-transform:uppercase; font-size:13px; }
-.modal__body{ padding:14px; }
+
+/* ✅ ОБНОВЛЕНО: скролл именно в контенте */
+.modal__body{
+  padding:14px;
+  overflow:auto;
+  flex: 1;
+}
+
 .modal__foot{
   padding:14px;
   border-top:1px solid rgba(43,58,85,.55);
