@@ -64,7 +64,7 @@ const ICON_EYE = "assets/icons/eye.svg";
 
 // ---------- LocalStorage keys ----------
 const LS = {
-  VAULTS: "vaults_index_v1",          // [{id,name,createdAt,updatedAt,fileName?}]
+  VAULTS: "vaults_index_v1",          // [{id,name,createdAt,updatedAt,fileName?,hidden?}]
   ACTIVE: "vault_active_v1",
   REMEMBER: "vault_remember_v1",
   GH_TOKEN: "vault_github_token_v1",
@@ -131,6 +131,10 @@ function escapeHtml(s){
 
 function stripHtml(html){
   return String(html || "").replace(/<[^>]+>/g, " ");
+}
+
+function isHiddenVaultMeta(v){
+  return !!(v && v.hidden === true);
 }
 
 // ---------- Note view (modal preview) ----------
@@ -520,11 +524,25 @@ function renderEditor(){
 let selectedVaultId = null;
 
 function renderVaultSelectDropdown(){
-  const vaults = loadVaults();
+  // ✅ скрытые исключаем
+  const vaultsAll = loadVaults();
+  const vaults = vaultsAll.filter(v => !isHiddenVaultMeta(v));
+
+  // если выбранный vault стал hidden — сбросим выбор на первый видимый
+  if (selectedVaultId){
+    const cur = vaultsAll.find(v => v.id === selectedVaultId);
+    if (cur && isHiddenVaultMeta(cur)){
+      selectedVaultId = null;
+    }
+  }
+
   if (!selectedVaultId) {
     const rememberedOk = isRememberSelected();
     const last = rememberedOk ? getActiveVaultId() : null;
-    selectedVaultId = last || vaults[0]?.id || null;
+
+    // last может быть hidden — тогда выберем первый видимый
+    const lastIsVisible = last && vaults.find(v => v.id === last);
+    selectedVaultId = (lastIsVisible ? last : (vaults[0]?.id || null));
   }
 
   const items = vaults.length
@@ -597,7 +615,7 @@ function openCreateVaultModal(){
 
         const id = uid();
         const vaults = loadVaults();
-        vaults.push({ id, name, createdAt: nowISO(), updatedAt: nowISO() });
+        vaults.push({ id, name, createdAt: nowISO(), updatedAt: nowISO(), hidden:false });
         saveVaults(vaults);
 
         await initVaultBlob(id, pass);
@@ -670,12 +688,16 @@ function openImportVaultModal(){
     try{
       const token = getGhToken();
       const index = await ghGetIndex(token);
-      if (!index.length){
-        listEl.innerHTML = `<div class="muted">index.json не найден или пустой</div>`;
+
+      // ✅ скрытые не показываем
+      const visible = index.filter(v => !(v && v.hidden === true));
+
+      if (!visible.length){
+        listEl.innerHTML = `<div class="muted">Список пустой (или всё скрыто)</div>`;
         return;
       }
 
-      listEl.innerHTML = index.map(v => `
+      listEl.innerHTML = visible.map(v => `
         <button class="impItem" type="button" data-id="${escapeHtml(v.id)}">
           ${escapeHtml(v.name || "Vault")}
           <span class="muted">·</span>
@@ -719,6 +741,7 @@ function openImportVaultModal(){
         id: vaultId,
         name: meta.name || `Vault ${vaultId.slice(-6)}`,
         fileName: meta.fileName,
+        hidden: !!meta.hidden,
         createdAt: meta.createdAt || nowISO(),
         updatedAt: nowISO()
       });
@@ -844,7 +867,7 @@ function openSettingsModal(){
         const next = vaults2.filter(x => x.id !== cur.id);
         saveVaults(next);
 
-        selectedVaultId = next[0]?.id || null;
+        selectedVaultId = next.filter(v => !isHiddenVaultMeta(v))[0]?.id || null;
         if (getActiveVaultId() === cur.id) setActiveVaultId(selectedVaultId || "");
 
         closeModal();
@@ -857,10 +880,7 @@ function openSettingsModal(){
 
 /* =========================================================================
    ✅ Улучшение: имя файла на GitHub = название хранилища (а не vaultId)
-   - В GitHub кладём: notes/data/vaults/<slug(название)>.json
-   - Чтобы не было конфликтов одинаковых названий, ведём index.json:
-       [{ id, name, fileName, createdAt, updatedAt }]
-   - При автоподгрузке/логине ищем fileName через index.json.
+   + ✅ NEW: поддержка hidden:true в index.json (скрытые не показываем)
    ========================================================================= */
 
 // ---------- Slugify (RU -> latin) ----------
@@ -1000,6 +1020,7 @@ function mergeRemoteIndexToLocal(indexArr){
       id: it.id,
       name: it.name || prev.name || `Vault ${String(it.id).slice(-6)}`,
       fileName: it.fileName || prev.fileName,
+      hidden: (it.hidden === true) ? true : (prev.hidden === true ? true : false),
       createdAt: it.createdAt || prev.createdAt || nowISO(),
       updatedAt: it.updatedAt || prev.updatedAt || nowISO(),
     });
@@ -1030,6 +1051,7 @@ async function ensureVaultMetaFromRemote(vaultId, token){
       id: found.id,
       name: found.name || local?.name || `Vault ${vaultId.slice(-6)}`,
       fileName: found.fileName,
+      hidden: (found.hidden === true),
       createdAt: found.createdAt || local?.createdAt || nowISO(),
       updatedAt: found.updatedAt || local?.updatedAt || nowISO()
     });
@@ -1057,7 +1079,7 @@ async function githubSaveCurrentVault(){
   const blob = await saveVaultDataLocal();
 
   // 1) определяем имя файла из названия
-  const localMeta = getVaultMeta(state.vaultId) || { id: state.vaultId, name: "Vault", createdAt: nowISO(), updatedAt: nowISO() };
+  const localMeta = getVaultMeta(state.vaultId) || { id: state.vaultId, name: "Vault", createdAt: nowISO(), updatedAt: nowISO(), hidden:false };
   const desiredFile = fileNameFromVaultName(localMeta.name || "Vault");
 
   // 2) берём index.json, чтобы:
@@ -1088,11 +1110,12 @@ async function githubSaveCurrentVault(){
     id: state.vaultId,
     name: localMeta.name || "Vault",
     fileName: finalFile,
+    hidden: (localMeta.hidden === true),
     updatedAt: nowISO(),
     createdAt: localMeta.createdAt || nowISO()
   });
 
-  // 6) обновляем index.json на GitHub
+  // 6) обновляем index.json на GitHub (с учётом hidden)
   const nextIndex = (() => {
     const map = new Map(Array.isArray(remoteIndex) ? remoteIndex.filter(Boolean).map(v => [v.id, v]) : []);
     const prev = map.get(state.vaultId) || {};
@@ -1101,6 +1124,7 @@ async function githubSaveCurrentVault(){
       id: state.vaultId,
       name: localMeta.name || prev.name || "Vault",
       fileName: finalFile,
+      hidden: (localMeta.hidden === true),
       createdAt: prev.createdAt || localMeta.createdAt || nowISO(),
       updatedAt: nowISO()
     });
@@ -1133,8 +1157,12 @@ async function ensureVaultBlob(vaultId){
 
   const meta = getVaultMeta(vaultId);
 
-  // 1) Try public raw file (works for public repos, no token needed)
-  //    сначала по fileName (новая схема), потом legacy по id.json (на случай старых файлов)
+  // если хранилище скрыто — не даём скачать/войти (опционально).
+  // Если хочешь разрешить вход по прямому ID даже когда hidden=true — удали этот блок.
+  if (meta && meta.hidden === true){
+    return false;
+  }
+
   const tryRaw = async (path) => {
     try{
       const json = await ghGetRawJson(path);
@@ -1151,14 +1179,14 @@ async function ensureVaultBlob(vaultId){
     if (ok) return true;
   }
 
-  // legacy fallback: <id>.json (если вдруг остались старые файлы)
+  // legacy fallback: <id>.json
   {
     const legacy = `${ghBaseDir()}/${encodeURIComponent(vaultId)}.json`;
     const ok = await tryRaw(legacy);
     if (ok) return true;
   }
 
-  // 2) Fallback: GitHub API (requires token for private repos / rate limits)
+  // 2) API fallback
   try{
     const token = getGhToken();
     if (token){
@@ -1171,7 +1199,6 @@ async function ensureVaultBlob(vaultId){
         }
       }
 
-      // legacy fallback API
       const legacyPath = `${ghBaseDir()}/${String(vaultId).replace(/[^\w\-]/g, "_")}.json`;
       const r2 = await ghGetFileJson(token, legacyPath);
       if (r2.exists && r2.json){
@@ -1491,7 +1518,7 @@ bodyInput.addEventListener("click", (e) => {
 
   renderVaultSelectDropdown();
 
-  const vaults = loadVaults();
+  const vaults = loadVaults().filter(v => !isHiddenVaultMeta(v));
   if (vaults.length === 0){
     setTimeout(() => toast("Создай хранилище: кнопка «Создать»"), 250);
   }
