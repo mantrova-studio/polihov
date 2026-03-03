@@ -542,3 +542,24 @@ body::-webkit-scrollbar-thumb:hover,
 .sectionLabel{ font-size:12px; text-transform:uppercase; letter-spacing:.06em; }
 .card--flat{ box-shadow:none !important; }
 
+
+
+/* --- Import from GitHub (lock screen) --- */
+.impList{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.impItem{
+  width:100%;
+  text-align:left;
+  border:1px solid var(--border);
+  background: rgba(18,26,42,.65);
+  color: var(--text);
+  padding:12px 12px;
+  border-radius: 12px;
+  cursor:pointer;
+}
+.impItem:hover{
+  background: rgba(30,42,66,.75);
+}
