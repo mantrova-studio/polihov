@@ -25,6 +25,7 @@ const toggleLoginPass = qs("#toggleLoginPass");
 const rememberCheck = qs("#rememberCheck");
 const vaultSelectDDRoot = qs("#vaultSelectDD");
 const createVaultBtn = qs("#createVaultBtn");
+const importVaultBtn = qs("#importVaultBtn");
 
 // app UI
 const lockBtn = qs("#lockBtn");
@@ -597,6 +598,150 @@ function openCreateVaultModal(){
   });
 }
 
+
+// ---------- Import vault from GitHub ----------
+function openImportVaultModal(){
+  openModal({
+    title: "Импорт из GitHub",
+    bodyHTML: `
+      <div class="form">
+        <div class="hint">
+          <span class="dot"></span>
+          Импорт подтягивает файл хранилища из репозитория и добавляет его на это устройство.
+          После импорта просто выбери хранилище и введи пароль.
+        </div>
+
+        <label class="field">
+          <span class="field__label">GitHub Token (необязательно для публичного репо)</span>
+          <input class="input" id="impToken" type="password" placeholder="ghp_..." value="${escapeHtml(getGhToken())}" />
+        </label>
+
+        <div class="card card--flat mt-8">
+          <div class="card__head mb-10">
+            <div class="muted sectionLabel">Импорт по ID</div>
+          </div>
+
+          <label class="field">
+            <span class="field__label">Vault ID (пример: v_abcd1234...)</span>
+            <input class="input" id="impVaultId" type="text" placeholder="v_..." />
+            <div class="hint mt-8">
+              <span class="dot"></span>
+              ID виден на главном экране после входа (строка «ID: …») или в названии файла в репозитории.
+            </div>
+          </label>
+
+          <div class="row">
+            <button class="btn btn--primary" id="impDoById" type="button">Импортировать</button>
+          </div>
+        </div>
+
+        <div class="card card--flat mt-10">
+          <div class="card__head mb-10">
+            <div class="muted sectionLabel">Список файлов в репозитории</div>
+          </div>
+
+          <div class="row">
+            <button class="btn btn--ghost" id="impLoadList" type="button">Загрузить список</button>
+          </div>
+
+          <div class="impList mt-10" id="impList"></div>
+
+          <div class="hint mt-10">
+            <span class="dot"></span>
+            Папка: <span class="mono">${escapeHtml(GH_FILE.baseDir)}</span>
+          </div>
+        </div>
+      </div>
+    `,
+    footHTML: `
+      <button class="btn btn--ghost" data-close="1">Закрыть</button>
+    `,
+    onMount: () => {
+      const tokenEl = qs("#impToken");
+      const saveToken = () => setGhToken((tokenEl.value || "").trim());
+
+      qs("#impDoById").addEventListener("click", async () => {
+        saveToken();
+        const id = (qs("#impVaultId").value || "").trim();
+        if (!id){ toast("Укажи Vault ID"); return; }
+        await importVaultById(id);
+      });
+
+      qs("#impLoadList").addEventListener("click", async () => {
+        saveToken();
+        await importListAndRender();
+      });
+    }
+  });
+
+  async function importListAndRender(){
+    const listEl = qs("#impList");
+    listEl.innerHTML = `<div class="muted">Загрузка…</div>`;
+
+    try{
+      const token = getGhToken();
+      const files = await ghListVaultFiles(token);
+      if (!files.length){
+        listEl.innerHTML = `<div class="muted">Файлы не найдены</div>`;
+        return;
+      }
+
+      listEl.innerHTML = files.map(f => `
+        <button class="impItem" type="button" data-id="${escapeHtml(f.id)}">
+          <span class="mono">${escapeHtml(f.id)}</span>
+          <span class="muted">(${escapeHtml(f.name)})</span>
+        </button>
+      `).join("");
+
+      listEl.querySelectorAll(".impItem").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const id = btn.getAttribute("data-id");
+          if (!id) return;
+          await importVaultById(id);
+        });
+      });
+    }catch(e){
+      console.error(e);
+      listEl.innerHTML = `<div class="muted">Ошибка загрузки списка</div>`;
+      toast("Не удалось получить список");
+    }
+  }
+
+  async function importVaultById(vaultId){
+    try{
+      const token = getGhToken();
+      const path = ghPathForVault(vaultId);
+      const res = await ghGetFileJson(token, path);
+      if (!res.exists || !res.json){
+        toast("Файл хранилища не найден");
+        return;
+      }
+
+      saveBlob(vaultId, res.json);
+
+      const vaults = loadVaults();
+      if (!vaults.find(v => v.id === vaultId)){
+        vaults.unshift({
+          id: vaultId,
+          name: `Vault ${vaultId.slice(-6)}`,
+          createdAt: nowISO(),
+          updatedAt: nowISO()
+        });
+        saveVaults(vaults);
+      }
+
+      selectedVaultId = vaultId;
+      if (isRememberSelected()) setActiveVaultId(vaultId);
+
+      renderVaultSelectDropdown();
+      toast("Импортировано ✅");
+      closeModal();
+    }catch(e){
+      console.error(e);
+      toast("Ошибка импорта");
+    }
+  }
+}
 // ---------- Settings ----------
 function getGhToken(){
   return (localStorage.getItem(LS.GH_TOKEN) || "").trim();
@@ -736,6 +881,36 @@ async function ghGetFile(token, path){
   const data = await res.json();
   return { exists:true, sha:data.sha };
 }
+
+async function ghGetFileJson(token, path){
+  const url = `https://api.github.com/repos/${GH_FILE.owner}/${GH_FILE.repo}/contents/${path}?ref=${encodeURIComponent(GH_FILE.branch)}`;
+  const headers = token ? ghApiHeaders(token) : { "Accept":"application/vnd.github+json" };
+  const res = await fetch(url, { headers });
+  if (res.status === 404) return { exists:false, json:null, sha:null };
+  if (!res.ok) throw new Error(`GitHub GET failed: ${res.status}`);
+  const data = await res.json();
+  const content = data.content ? decodeURIComponent(escape(atob(data.content.replace(/\n/g,"")))) : "";
+  const json = content ? JSON.parse(content) : null;
+  return { exists:true, json, sha:data.sha };
+}
+
+async function ghListVaultFiles(token){
+  const base = String(GH_FILE.baseDir || "notes/data/vaults").replace(/\/+$/,"");
+  const url = `https://api.github.com/repos/${GH_FILE.owner}/${GH_FILE.repo}/contents/${base}?ref=${encodeURIComponent(GH_FILE.branch)}`;
+  const headers = token ? ghApiHeaders(token) : { "Accept":"application/vnd.github+json" };
+  const res = await fetch(url, { headers });
+  if (res.status === 404) return [];
+  if (!res.ok) throw new Error(`GitHub LIST failed: ${res.status}`);
+  const arr = await res.json();
+  if (!Array.isArray(arr)) return [];
+  return arr
+    .filter(x => x && x.type === "file" && typeof x.name === "string" && x.name.endsWith(".json"))
+    .map(x => ({
+      name: x.name,
+      id: x.name.replace(/\.json$/,""),
+      path: x.path
+    }));
+}
 async function ghPutFile(token, path, json, sha){
   const url = `https://api.github.com/repos/${GH_FILE.owner}/${GH_FILE.repo}/contents/${path}`;
   const body = {
@@ -834,6 +1009,7 @@ loginForm.addEventListener("submit", async (e) => {
 });
 
 createVaultBtn.addEventListener("click", openCreateVaultModal);
+importVaultBtn.addEventListener("click", openImportVaultModal);
 
 toggleLoginPass.addEventListener("click", () => {
   const isPass = passwordInput.type === "password";
