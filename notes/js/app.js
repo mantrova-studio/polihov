@@ -639,6 +639,17 @@ function openImportVaultModal(){
     bodyHTML: `
       <div class="form">
 
+        <div class="hint">
+          <span class="dot"></span>
+          Импорт подтягивает файл хранилища из репозитория и добавляет его на это устройство.
+          После импорта просто выбери хранилище и введи пароль.
+        </div>
+
+        <label class="field">
+          <span class="field__label">GitHub Token (необязательно для публичного репо)</span>
+          <input class="input" id="impToken" type="password" placeholder="ghp_..." value="${escapeHtml(getGhToken())}" />
+        </label>
+
         <div class="card card--flat mt-10">
           <div class="card__head mb-10">
             <div class="muted sectionLabel">Список хранилищ</div>
