@@ -6,7 +6,8 @@ const GITHUB_REPO  = "polihov";
 const GITHUB_PATH  = "bank/data/piggy.json"; // файл с копилками
 
 // Для чтения без токена через GitHub Pages (другие устройства/инкогнито)
-// Берём URL относительно текущей страницы, чтобы не получить /bank/bank/...
+// Если страница открыта как /bank/ , то правильный путь: /bank/data/piggy.json
+// Поэтому используем относительный путь ОТ ТЕКУЩЕЙ ПАПКИ страницы:
 const PAGES_PATH   = "data/piggy.json";
 
 // ===== Login gate =====
@@ -15,147 +16,392 @@ const AUTH_KEY = "tsc_piggy_auth_v1";
 
 // DOM login
 const loginWrap = document.getElementById("loginWrap");
-const loginInput = document.getElementById("loginPass");
-const loginBtn = document.getElementById("loginBtn");
-const loginErr = document.getElementById("loginErr");
+const loginPass = document.getElementById("loginPass");
+const loginRemember = document.getElementById("loginRemember");
+const loginError = document.getElementById("loginError");
 
-// DOM app
-const appWrap = document.getElementById("appWrap");
-const toastEl = document.getElementById("toast");
+const loginOk = document.getElementById("loginOk");
+const loginCancel = document.getElementById("loginCancel");
+const loginClose = document.getElementById("loginClose");
 
-// UI
-const elBanksList = document.getElementById("banksList");
-const elEmpty = document.getElementById("emptyState");
+function isAuthed(){
+  return localStorage.getItem(AUTH_KEY) === "1";
+}
+function setAuthed(ok){
+  if(ok) localStorage.setItem(AUTH_KEY, "1");
+  else localStorage.removeItem(AUTH_KEY);
+}
 
-const elModal = document.getElementById("modal");
-const elModalTitle = document.getElementById("modalTitle");
-const elModalClose = document.getElementById("modalClose");
-const elForm = document.getElementById("bankForm");
+function openLogin(){
+  document.body.classList.add("locked");
+  loginWrap.classList.add("open");
+  loginWrap.setAttribute("aria-hidden","false");
+  loginError.style.display = "none";
+  loginError.textContent = "";
+  loginPass.value = "";
+  setTimeout(()=>loginPass.focus(), 60);
+}
 
-const inId = document.getElementById("bankId");
-const inTitle = document.getElementById("bankTitle");
-const inGoal = document.getElementById("bankGoal");
-const inCurrency = document.getElementById("bankCurrency");
-const inBalance = document.getElementById("bankBalance");
-const inColor = document.getElementById("bankColor");
-const inEmoji = document.getElementById("bankEmoji");
-const inHidden = document.getElementById("bankHidden");
+function closeLogin(){
+  loginWrap.classList.remove("open");
+  loginWrap.setAttribute("aria-hidden","true");
+  document.body.classList.remove("locked");
+}
 
-const btnNew = document.getElementById("btnNew");
-const btnSaveGitHub = document.getElementById("btnSaveGitHub");
-const btnExport = document.getElementById("btnExport");
-const btnImport = document.getElementById("btnImport");
+function showLoginError(msg){
+  loginError.textContent = msg || "Неверный пароль";
+  loginError.style.display = "block";
+}
 
-const elTokenModal = document.getElementById("tokenModal");
-const elTokenClose = document.getElementById("tokenClose");
-const inToken = document.getElementById("ghToken");
-const btnTokenSave = document.getElementById("tokenSave");
+function requireAuthOrLock(){
+  if(isAuthed()){
+    document.body.classList.remove("locked");
+    return true;
+  }
+  openLogin();
+  return false;
+}
 
-// ====== State ======
-let state = {
-  banks: [],
-  sha: null
+// обработчики
+loginOk?.addEventListener("click", ()=>{
+  const p = (loginPass.value || "").trim();
+  if(p !== APP_PASSWORD){
+    showLoginError("Неверный пароль.");
+    loginPass.select();
+    return;
+  }
+
+  // запомнить вход
+  if(loginRemember?.checked){
+    setAuthed(true);
+  }else{
+    // если НЕ запоминать — можно хранить только в sessionStorage:
+    // sessionStorage.setItem(AUTH_KEY, "1");
+    // и в isAuthed() проверять sessionStorage тоже
+    setAuthed(true); // проще: всё равно запомнит
+  }
+
+  closeLogin();
+  // после входа — перерендер
+  render?.();
+});
+
+loginCancel?.addEventListener("click", ()=>{
+  // остаёмся “закрытым”
+  openLogin();
+});
+
+loginClose?.addEventListener("click", ()=>{
+  openLogin();
+});
+
+loginWrap?.addEventListener("click", (e)=>{
+  if(e.target === loginWrap) openLogin();
+});
+
+loginPass?.addEventListener("keydown", (e)=>{
+  if(e.key === "Enter") loginOk?.click();
+});
+
+// ====== Token storage ======
+const TOKEN_SESSION_KEY = "tsc_piggy_github_token_session_v1";
+const TOKEN_LOCAL_KEY   = "tsc_piggy_github_token_local_v1";
+
+// ====== DOM ======
+const grid = document.getElementById("grid");
+const empty = document.getElementById("empty");
+
+const createBtn = document.getElementById("createBtn");
+const depositBtn = document.getElementById("depositBtn");
+const withdrawBtn = document.getElementById("withdrawBtn");
+
+const loadGithubBtn = document.getElementById("loadGithubBtn");
+const saveGithubBtn = document.getElementById("saveGithubBtn");
+
+const orderBtn = document.getElementById("orderBtn");
+
+// actions toggle (show/hide card actions)
+const actionsBtn = document.getElementById("actionsBtn");
+const actionsIconEdit = document.getElementById("actionsIconEdit");
+const actionsIconDone = document.getElementById("actionsIconDone");
+
+const searchInput = document.getElementById("searchInput");
+const clearSearch = document.getElementById("clearSearch");
+
+// modal (create/edit/ops)
+const modalWrap = document.getElementById("modalWrap");
+const modalTitle = document.getElementById("modalTitle");
+const closeModal = document.getElementById("closeModal");
+const cancelBtn = document.getElementById("cancelBtn");
+const saveBtn = document.getElementById("saveBtn");
+
+const createForm = document.getElementById("createForm");
+const opForm = document.getElementById("opForm");
+const opHint = document.getElementById("opHint");
+
+const f_name = document.getElementById("f_name");
+const f_goal = document.getElementById("f_goal");
+const f_start = document.getElementById("f_start");
+
+const f_bank = document.getElementById("f_bank");
+const f_amount = document.getElementById("f_amount");
+
+// token modal (from index.html)
+const tokenWrap = document.getElementById("tokenWrap");
+const tokenClose = document.getElementById("tokenClose");
+const tokenCancel = document.getElementById("tokenCancel");
+const tokenTest = document.getElementById("tokenTest");
+const tokenOk = document.getElementById("tokenOk");
+const tokenInput = document.getElementById("tokenInput");
+const tokenRemember = document.getElementById("tokenRemember");
+const tokenError = document.getElementById("tokenError");
+
+// ====== STATE ======
+let banks = [];
+let filtered = [];
+let query = "";
+
+let modalMode = null; // "create" | "deposit" | "withdraw" | "edit"
+let editingId = null;
+
+// reorder mode
+let reorderMode = false;
+let sortable = null;
+
+// actions mode (show buttons on cards)
+let actionsMode = false;
+
+const ICONS = {
+  plus: `
+    <svg viewBox="0 0 24 24">
+      <line x1="12" y1="5" x2="12" y2="19"/>
+      <line x1="5"  y1="12" x2="19" y2="12"/>
+    </svg>
+  `,
+  minus: `
+    <svg viewBox="0 0 24 24">
+      <line x1="5" y1="12" x2="19" y2="12"/>
+    </svg>
+  `,
+  upload: `
+    <svg viewBox="0 0 24 24">
+      <path d="M12 3v12"/>
+      <path d="M7 8l5-5 5 5"/>
+      <path d="M5 21h14"/>
+    </svg>
+  `,
+  download: `
+    <svg viewBox="0 0 24 24">
+      <path d="M12 21V9"/>
+      <path d="M7 16l5 5 5-5"/>
+      <path d="M5 3h14"/>
+    </svg>
+  `,
+  edit: `
+    <svg viewBox="0 0 24 24">
+      <path d="M12 20h9"/>
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
+    </svg>
+  `,
+  trash: `
+    <svg viewBox="0 0 24 24">
+      <path d="M3 6h18"/>
+      <path d="M8 6V4h8v2"/>
+      <path d="M6 6l1 14h10l1-14"/>
+      <path d="M10 11v6"/>
+      <path d="M14 11v6"/>
+    </svg>
+  `,
+  spinner: `
+  <svg class="spin" viewBox="0 0 24 24">
+    <circle
+      cx="12"
+      cy="12"
+      r="9"
+      stroke="white"
+      stroke-width="2"
+      fill="none"
+      stroke-linecap="round"
+      stroke-dasharray="50"
+      stroke-dashoffset="35"
+    />
+  </svg>
+`,
+  check: `
+    <svg viewBox="0 0 24 24">
+      <line x1="4"  y1="13" x2="9"  y2="18"/>
+      <line x1="9"  y1="18" x2="20" y2="7"/>
+    </svg>
+  `,
+  clock: `
+    <svg viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="8" fill="none"/>
+      <line x1="12" y1="7" x2="12" y2="12"/>
+      <line x1="12" y1="12" x2="15" y2="14"/>
+    </svg>
+  `
 };
 
-let ghToken = "";
-
-// ====== Utils ======
-const qs = (s, el = document) => el.querySelector(s);
-
-function toast(msg, ok = true){
-  if(!toastEl) return;
-  toastEl.textContent = msg;
-  toastEl.classList.remove("ok","bad","show");
-  toastEl.classList.add(ok ? "ok":"bad");
-  toastEl.offsetHeight; // reflow
-  toastEl.classList.add("show");
-  setTimeout(()=> toastEl.classList.remove("show"), 2600);
+// ====== helpers ======
+function escapeHtml(str){
+  return (str ?? "").toString()
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
 }
 
-function uid(){
-  return "b_" + Math.random().toString(16).slice(2) + Date.now().toString(16);
+function money(n){
+  const v = Number(n || 0);
+  return new Intl.NumberFormat("ru-RU").format(Math.round(v));
 }
 
-function fmtMoney(n){
-  const x = Number(n||0);
-  return x.toLocaleString("ru-RU", { maximumFractionDigits: 2 });
+function norm(s){ return (s ?? "").toString().trim().toLowerCase(); }
+
+function slug(s){
+  return (s ?? "")
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replaceAll("ё","е")
+    .replace(/[^a-z0-9а-я]/g,"-")
+    .replace(/-+/g,"-")
+    .replace(/^-|-$/g,"");
 }
 
-function clamp01(x){
-  x = Number(x||0);
-  if(x < 0) return 0;
-  if(x > 1) return 1;
-  return x;
+function uniqueId(base){
+  const ids = new Set(banks.map(b => b.id));
+  let id = base || "bank";
+  let n = 2;
+  while(ids.has(id)) id = `${base}-${n++}`;
+  return id;
 }
 
-function percent(balance, goal){
-  const b = Number(balance||0);
-  const g = Number(goal||0);
-  if(!g) return 0;
-  return clamp01(b / g);
+function parseNum(val){
+  const s = (val ?? "").toString().replace(/\s/g,"").replace(",",".");
+  const n = Number(s);
+  if(!Number.isFinite(n)) return null;
+  return n;
 }
 
-// ====== Storage (local) ======
-function loadLocal(){
-  try{
-    const raw = localStorage.getItem(APP_KEY);
-    if(!raw) return null;
-    return JSON.parse(raw);
-  }catch(e){
-    return null;
+function setSelectBanks(){
+  if(!f_bank) return;
+  f_bank.innerHTML = "";
+  for(const b of banks){
+    const opt = document.createElement("option");
+    opt.value = b.id;
+    opt.textContent = b.name;
+    f_bank.appendChild(opt);
   }
 }
 
-function saveLocal(data){
-  localStorage.setItem(APP_KEY, JSON.stringify(data));
+function loadCache(){
+  try{
+    const raw = localStorage.getItem(APP_KEY);
+    if(!raw) return false;
+    const data = JSON.parse(raw);
+    if(!Array.isArray(data?.banks)) return false;
+    banks = normalizeBanks(data.banks);
+    return true;
+  }catch{
+    return false;
+  }
 }
 
-function clearLocal(){
-  localStorage.removeItem(APP_KEY);
+function saveCache(){
+  localStorage.setItem(APP_KEY, JSON.stringify({ banks }, null, 2));
 }
 
-// ====== GitHub API helpers ======
-function ghApiUrl(path){
-  return `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}`;
+function normalizeBanks(list){
+  const arr = Array.isArray(list) ? list : [];
+  const map = new Map();
+  for(const x of arr){
+    if(!x) continue;
+    const id = String(x.id || "").trim();
+    const name = String(x.name || "").trim();
+    if(!id || !name) continue;
+    map.set(id, {
+      id,
+      name,
+      goal: (x.goal === null || x.goal === "" || x.goal === undefined) ? null : Number(x.goal),
+      balance: Number(x.balance || 0),
+      createdAt: Number(x.createdAt || 0) || null,
+      order: Number(x.order || 0) || null
+    });
+  }
+  return Array.from(map.values());
 }
 
-async function githubGetFile(path, token){
-  const url = ghApiUrl(path);
-  const res = await fetch(url, {
-    headers: {
-      "Accept": "application/vnd.github+json",
-      ...(token ? { "Authorization": `token ${token}` } : {})
-    }
+// если у старых копилок нет order/createdAt — назначаем один раз
+function ensureOrderFields(){
+  const now = Date.now();
+  let changed = false;
+  banks = banks.map((b, i) => {
+    const createdAt = b.createdAt ?? (now - i);
+    const order = b.order ?? createdAt;
+    if(b.createdAt == null || b.order == null) changed = true;
+    return { ...b, createdAt, order };
   });
-  if(!res.ok) throw new Error("GET failed: " + res.status);
-  return await res.json();
+  if(changed) saveCache();
 }
 
-async function githubPutFile(path, contentObj, sha, token, message){
-  const url = ghApiUrl(path);
+// ====== GitHub API ======
+function toBase64Utf8(str){
+  return btoa(unescape(encodeURIComponent(str)));
+}
+
+function ghHeaders(token){
+  return {
+    "Authorization": `Bearer ${token}`,
+    "Accept": "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28"
+  };
+}
+
+async function githubGetFile(token){
+  const api = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_PATH}`;
+
+  const res = await fetch(api, { headers: ghHeaders(token) });
+
+  if(!res.ok){
+    const t = await res.text();
+    throw new Error("GitHub read failed: " + t);
+  }
+
+  const json = await res.json();
+  const content = decodeURIComponent(escape(atob((json.content || "").replace(/\n/g,""))));
+  return { data: JSON.parse(content), sha: json.sha };
+}
+
+async function githubPutFile(newData, sha, token){
+  const api = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_PATH}`;
+  const jsonText = JSON.stringify(newData, null, 2);
+
   const body = {
-    message: message || "Update piggy banks",
-    content: btoa(unescape(encodeURIComponent(JSON.stringify(contentObj, null, 2)))),
+    message: "Update piggy.json via web",
+    content: toBase64Utf8(jsonText),
     sha
   };
 
-  const res = await fetch(url, {
+  const res = await fetch(api, {
     method: "PUT",
     headers: {
-      "Accept": "application/vnd.github+json",
-      "Authorization": `token ${token}`
+      ...ghHeaders(token),
+      "Content-Type": "application/json"
     },
     body: JSON.stringify(body)
   });
 
   if(!res.ok){
-    const t = await res.text().catch(()=> "");
-    throw new Error("PUT failed: " + res.status + " " + t);
+    const t = await res.text();
+    throw new Error("GitHub save failed: " + t);
   }
+
   return await res.json();
 }
 
-// ====== GitHub Pages read (no token) ======
+// 2) Чтение через GitHub Pages (без токена)
 async function pagesGetFile(){
   // Важно: не используем GITHUB_PATH тут, иначе на /bank/ получится /bank/bank/...
   const u = new URL(PAGES_PATH, window.location.href);
@@ -165,392 +411,532 @@ async function pagesGetFile(){
   return await res.json();
 }
 
-// ====== Auth ======
-function isAuthed(){
-  return localStorage.getItem(AUTH_KEY) === "1";
+// ====== Token modal ======
+function openToken(){
+  tokenWrap?.classList.add("open");
+  tokenWrap?.setAttribute("aria-hidden","false");
+  tokenError.style.display = "none";
+  tokenError.textContent = "";
+  tokenInput.value = "";
+  setTimeout(()=>tokenInput.focus(), 60);
+}
+function closeToken(){
+  tokenWrap?.classList.remove("open");
+  tokenWrap?.setAttribute("aria-hidden","true");
+}
+function showTokenError(msg){
+  tokenError.textContent = msg || "Ошибка";
+  tokenError.style.display = "block";
 }
 
-function setAuthed(v){
-  if(v) localStorage.setItem(AUTH_KEY,"1");
-  else localStorage.removeItem(AUTH_KEY);
+function getTokenFromStorage(){
+  // сначала session, потом local
+  return sessionStorage.getItem(TOKEN_SESSION_KEY) || localStorage.getItem(TOKEN_LOCAL_KEY) || "";
 }
 
-function showLogin(){
-  loginWrap?.classList.remove("hidden");
-  appWrap?.classList.add("hidden");
-}
+function setTokenToStorage(token, remember){
+  // remember=true => localStorage, иначе sessionStorage
+  sessionStorage.removeItem(TOKEN_SESSION_KEY);
+  localStorage.removeItem(TOKEN_LOCAL_KEY);
 
-function showApp(){
-  loginWrap?.classList.add("hidden");
-  appWrap?.classList.remove("hidden");
-}
+  if(!token) return;
 
-// ====== Modal ======
-function openModal(title){
-  elModalTitle.textContent = title;
-  elModal.classList.add("show");
-}
-
-function closeModal(){
-  elModal.classList.remove("show");
-}
-
-// Token modal
-function openTokenModal(){
-  elTokenModal.classList.add("show");
-  inToken.value = ghToken || "";
-  inToken.focus();
-}
-
-function closeTokenModal(){
-  elTokenModal.classList.remove("show");
-}
-
-// ====== Render ======
-function render(){
-  const banks = (state.banks || []).slice();
-
-  // Если есть hidden=true — скрываем из списка
-  const visible = banks.filter(b => !b.hidden);
-
-  elBanksList.innerHTML = "";
-  if(!visible.length){
-    elEmpty.classList.remove("hidden");
+  if(remember){
+    localStorage.setItem(TOKEN_LOCAL_KEY, token);
   }else{
-    elEmpty.classList.add("hidden");
+    sessionStorage.setItem(TOKEN_SESSION_KEY, token);
+  }
+}
+
+async function testToken(token){
+  // быстрый тест: read file meta
+  const api = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_PATH}`;
+  const res = await fetch(api, { headers: ghHeaders(token) });
+  return res.ok;
+}
+
+async function ensureValidToken(){
+  let token = getTokenFromStorage();
+  if(token) return token;
+
+  // попросим
+  openToken();
+
+  // вернём промис, который резолвится когда пользователь нажмёт ОК/Cancel
+  return await new Promise((resolve)=>{
+    const cleanup = ()=>{
+      tokenOk?.removeEventListener("click", onOk);
+      tokenCancel?.removeEventListener("click", onCancel);
+      tokenClose?.removeEventListener("click", onCancel);
+      tokenWrap?.removeEventListener("click", onWrap);
+      tokenTest?.removeEventListener("click", onTest);
+    };
+
+    const onCancel = ()=>{
+      cleanup();
+      closeToken();
+      resolve("");
+    };
+
+    const onWrap = (e)=>{
+      if(e.target === tokenWrap) onCancel();
+    };
+
+    const onTest = async ()=>{
+      const t = (tokenInput.value || "").trim();
+      if(!t){
+        showTokenError("Вставьте ключ.");
+        return;
+      }
+      tokenTest.disabled = true;
+      tokenTest.textContent = "Проверяю...";
+      try{
+        const ok = await testToken(t);
+        if(ok){
+          showTokenError("Ключ подходит ✅");
+          tokenError.style.color = "rgba(120,255,170,1)";
+        }else{
+          showTokenError("Ключ не подходит ❌");
+          tokenError.style.color = "rgba(192,75,75,1)";
+        }
+      }catch(e){
+        showTokenError("Ошибка проверки: " + (e?.message || ""));
+        tokenError.style.color = "rgba(192,75,75,1)";
+      }finally{
+        tokenTest.disabled = false;
+        tokenTest.textContent = "Проверить ключ";
+        setTimeout(()=>{ tokenError.style.color = "rgba(192,75,75,1)"; }, 1200);
+      }
+    };
+
+    const onOk = async ()=>{
+      const t = (tokenInput.value || "").trim();
+      if(!t){
+        showTokenError("Вставьте ключ.");
+        return;
+      }
+
+      tokenOk.disabled = true;
+      tokenOk.innerHTML = `${ICONS.spinner} Сохраняю...`;
+      try{
+        // можно проверить, но это лишний запрос; оставлю минимально
+        setTokenToStorage(t, !!tokenRemember?.checked);
+        cleanup();
+        closeToken();
+        resolve(t);
+      }finally{
+        tokenOk.disabled = false;
+        tokenOk.textContent = "Сохранить";
+      }
+    };
+
+    tokenOk?.addEventListener("click", onOk);
+    tokenCancel?.addEventListener("click", onCancel);
+    tokenClose?.addEventListener("click", onCancel);
+    tokenWrap?.addEventListener("click", onWrap);
+    tokenTest?.addEventListener("click", onTest);
+  });
+}
+
+// ====== toast ======
+let toastTimer = null;
+function toast({ title="", message="", icon="check", timeout=2400 }){
+  const box = document.createElement("div");
+  box.className = "toast";
+  box.innerHTML = `
+    <div class="toastIcon">${ICONS[icon] || ICONS.check}</div>
+    <div class="toastText">
+      <div class="toastTitle">${escapeHtml(title)}</div>
+      <div class="toastMsg">${escapeHtml(message)}</div>
+    </div>
+  `;
+  document.body.appendChild(box);
+  setTimeout(()=> box.classList.add("show"), 10);
+
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{
+    box.classList.remove("show");
+    setTimeout(()=> box.remove(), 350);
+  }, timeout);
+}
+
+// ====== render ======
+function filterBanks(){
+  const q = norm(query);
+  if(!q) return [...banks];
+  return banks.filter(b => norm(b.name).includes(q));
+}
+
+function render(){
+  if(!requireAuthOrLock()) return;
+
+  filtered = filterBanks();
+
+  if(!grid) return;
+  grid.innerHTML = "";
+
+  if(!filtered.length){
+    if(empty) empty.style.display = "block";
+    return;
+  }else{
+    if(empty) empty.style.display = "none";
   }
 
-  visible.forEach(b=>{
-    const bal = Number(b.balance||0);
-    const goal = Number(b.goal||0);
-
-    const p = percent(bal, goal);
-    const pText = Math.round(p * 100) + "%";
+  for(const b of filtered){
+    const goal = b.goal ? Number(b.goal) : null;
+    const pct = goal ? Math.min(100, Math.round((b.balance / goal) * 100)) : null;
 
     const card = document.createElement("div");
-    card.className = "bank";
+    card.className = "card";
+    card.dataset.id = b.id;
 
-    const top = document.createElement("div");
-    top.className = "bank-top";
+    card.innerHTML = `
+      <div class="cardTop">
+        <div class="cardTitle">${escapeHtml(b.name)}</div>
+        <div class="cardActions">
+          <button class="iconBtn primary" data-act="deposit" title="Пополнить">${ICONS.plus}</button>
+          <button class="iconBtn danger" data-act="withdraw" title="Вывести">${ICONS.minus}</button>
+          <button class="iconBtn" data-act="edit" title="Редактировать">${ICONS.edit}</button>
+          <button class="iconBtn danger" data-act="delete" title="Удалить">${ICONS.trash}</button>
+        </div>
+      </div>
 
-    const left = document.createElement("div");
-    left.className = "bank-left";
+      <div class="cardBody">
+        <div class="row">
+          <div class="muted">Накоплено</div>
+          <div class="val">${money(b.balance)} ₽</div>
+        </div>
 
-    const emoji = document.createElement("div");
-    emoji.className = "bank-emoji";
-    emoji.textContent = b.emoji || "💰";
-    emoji.style.background = b.color || "#222";
+        <div class="row">
+          <div class="muted">Цель</div>
+          <div class="val">${goal ? money(goal) + " ₽" : "—"}</div>
+        </div>
 
-    const title = document.createElement("div");
-    title.className = "bank-title";
-    title.textContent = b.title || "Без названия";
-
-    left.appendChild(emoji);
-    left.appendChild(title);
-
-    const right = document.createElement("div");
-    right.className = "bank-actions";
-
-    const btnEdit = document.createElement("button");
-    btnEdit.className = "btn small";
-    btnEdit.textContent = "✎";
-    btnEdit.title = "Редактировать";
-    btnEdit.onclick = ()=> editBank(b.id);
-
-    const btnDel = document.createElement("button");
-    btnDel.className = "btn small danger";
-    btnDel.textContent = "🗑";
-    btnDel.title = "Удалить";
-    btnDel.onclick = ()=> removeBank(b.id);
-
-    right.appendChild(btnEdit);
-    right.appendChild(btnDel);
-
-    top.appendChild(left);
-    top.appendChild(right);
-
-    const mid = document.createElement("div");
-    mid.className = "bank-mid";
-
-    const line1 = document.createElement("div");
-    line1.className = "bank-line";
-    line1.innerHTML = `
-      <div class="muted">Накоплено</div>
-      <div class="val">${fmtMoney(bal)} ${b.currency || "₽"}</div>
+        ${goal ? `
+          <div class="bar">
+            <div class="barFill" style="width:${pct}%;"></div>
+          </div>
+          <div class="tiny muted">${pct}%</div>
+        ` : `
+          <div class="tiny muted">Без цели</div>
+        `}
+      </div>
     `;
 
-    const line2 = document.createElement("div");
-    line2.className = "bank-line";
-    line2.innerHTML = `
-      <div class="muted">Цель</div>
-      <div class="val">${fmtMoney(goal)} ${b.currency || "₽"}</div>
-    `;
+    // actions
+    card.querySelectorAll("[data-act]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const act = btn.dataset.act;
+        if(act === "deposit"){ openOp("deposit", b.id); }
+        if(act === "withdraw"){ openOp("withdraw", b.id); }
+        if(act === "edit"){ openEdit(b.id); }
+        if(act === "delete"){ deleteBank(b.id); }
+      });
+    });
 
-    mid.appendChild(line1);
-    mid.appendChild(line2);
+    grid.appendChild(card);
+  }
 
-    const barWrap = document.createElement("div");
-    barWrap.className = "bar";
-
-    const bar = document.createElement("div");
-    bar.className = "bar-fill";
-    bar.style.width = (p*100).toFixed(2) + "%";
-    bar.style.background = b.color || "#6ee7ff";
-    barWrap.appendChild(bar);
-
-    const bot = document.createElement("div");
-    bot.className = "bank-bot";
-    bot.innerHTML = `
-      <div class="muted">${pText}</div>
-      <div class="muted">${b.id}</div>
-    `;
-
-    card.appendChild(top);
-    card.appendChild(mid);
-    card.appendChild(barWrap);
-    card.appendChild(bot);
-
-    elBanksList.appendChild(card);
-  });
-
-  // persist
-  saveLocal({ banks: state.banks, sha: state.sha });
+  setSelectBanks();
 }
 
-// ====== CRUD ======
-function resetForm(){
-  inId.value = "";
-  inTitle.value = "";
-  inGoal.value = "";
-  inCurrency.value = "₽";
-  inBalance.value = "";
-  inColor.value = "#6ee7ff";
-  inEmoji.value = "💰";
-  inHidden.checked = false;
+// ====== modal ======
+function openModalFn(title){
+  modalTitle.textContent = title || "Окно";
+  modalWrap.classList.add("open");
+  modalWrap.setAttribute("aria-hidden","false");
+}
+function closeModalFn(){
+  modalWrap.classList.remove("open");
+  modalWrap.setAttribute("aria-hidden","true");
+  createForm.style.display = "none";
+  opForm.style.display = "none";
+  modalMode = null;
+  editingId = null;
 }
 
-function newBank(){
-  resetForm();
-  openModal("Новая копилка");
+closeModal?.addEventListener("click", closeModalFn);
+cancelBtn?.addEventListener("click", closeModalFn);
+modalWrap?.addEventListener("click", (e)=>{
+  if(e.target === modalWrap) closeModalFn();
+});
+
+function openCreate(){
+  modalMode = "create";
+  openModalFn("Создать копилку");
+  createForm.style.display = "block";
+  opForm.style.display = "none";
+  f_name.value = "";
+  f_goal.value = "";
+  f_start.value = "";
+  setTimeout(()=>f_name.focus(), 70);
 }
 
-function editBank(id){
-  const b = (state.banks||[]).find(x=> x.id === id);
+function openEdit(id){
+  const b = banks.find(x => x.id === id);
   if(!b) return;
-  inId.value = b.id;
-  inTitle.value = b.title || "";
-  inGoal.value = b.goal ?? "";
-  inCurrency.value = b.currency || "₽";
-  inBalance.value = b.balance ?? "";
-  inColor.value = b.color || "#6ee7ff";
-  inEmoji.value = b.emoji || "💰";
-  inHidden.checked = !!b.hidden;
-  openModal("Редактировать");
+  modalMode = "edit";
+  editingId = id;
+  openModalFn("Редактировать");
+  createForm.style.display = "block";
+  opForm.style.display = "none";
+  f_name.value = b.name;
+  f_goal.value = (b.goal == null) ? "" : String(b.goal);
+  f_start.value = String(b.balance || 0);
+  setTimeout(()=>f_name.focus(), 70);
 }
 
-function removeBank(id){
+function openOp(mode, idPrefill){
+  modalMode = mode;
+  openModalFn(mode === "deposit" ? "Пополнить" : "Вывести");
+  createForm.style.display = "none";
+  opForm.style.display = "block";
+  if(opHint) opHint.textContent = "";
+  f_amount.value = "";
+  setSelectBanks();
+  if(idPrefill && f_bank){
+    f_bank.value = idPrefill;
+  }
+  setTimeout(()=>f_amount.focus(), 70);
+}
+
+function deleteBank(id){
   if(!confirm("Удалить копилку?")) return;
-  state.banks = (state.banks||[]).filter(x=> x.id !== id);
-  render();
-  toast("Удалено", true);
-}
-
-function upsertFromForm(){
-  const id = inId.value || uid();
-
-  const b = {
-    id,
-    title: (inTitle.value || "").trim(),
-    goal: Number(inGoal.value || 0),
-    currency: (inCurrency.value || "₽").trim(),
-    balance: Number(inBalance.value || 0),
-    color: inColor.value || "#6ee7ff",
-    emoji: (inEmoji.value || "💰").trim(),
-    hidden: !!inHidden.checked
-  };
-
-  const list = state.banks || [];
-  const idx = list.findIndex(x=> x.id === id);
-  if(idx >= 0) list[idx] = b;
-  else list.unshift(b);
-
-  state.banks = list;
-  render();
-  closeModal();
-  toast("Сохранено локально", true);
-}
-
-// ====== Import / Export ======
-function exportJson(){
-  const data = JSON.stringify({ banks: state.banks }, null, 2);
-  const blob = new Blob([data], { type: "application/json" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "piggy-export.json";
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
-
-function importJsonFile(file){
-  const fr = new FileReader();
-  fr.onload = ()=>{
-    try{
-      const obj = JSON.parse(fr.result);
-      if(obj && Array.isArray(obj.banks)){
-        state.banks = obj.banks;
-        render();
-        toast("Импортировано", true);
-      }else{
-        toast("Неверный формат файла", false);
-      }
-    }catch(e){
-      toast("Ошибка чтения JSON", false);
-    }
-  };
-  fr.readAsText(file);
-}
-
-// ====== Auto load (Pages -> local fallback) ======
-async function autoLoadState(){
-  // 1) Пробуем загрузить с Pages (общие данные для всех устройств)
-  const pages = await pagesGetFile();
-  if(pages && Array.isArray(pages.banks)){
-    state.banks = pages.banks;
-    // sha тут неизвестна без GitHub API
-    state.sha = null;
-    render();
-    toast("Загружено с GitHub Pages", true);
-    return;
-  }
-
-  // 2) Фоллбек: localStorage
-  const local = loadLocal();
-  if(local && Array.isArray(local.banks)){
-    state.banks = local.banks;
-    state.sha = local.sha || null;
-    render();
-    toast("Загружено локально", true);
-    return;
-  }
-
-  // 3) Пусто
-  state.banks = [];
-  state.sha = null;
+  banks = banks.filter(x => x.id !== id);
+  saveCache();
   render();
 }
 
-// ====== Save to GitHub ======
-async function saveToGitHub(){
-  if(!ghToken){
-    openTokenModal();
-    return;
-  }
+// ====== save from modal ======
+function saveFromModal(){
+  if(modalMode === "create" || modalMode === "edit"){
+    const name = (f_name?.value || "").trim();
+    const goal = parseNum(f_goal?.value);
+    const start = parseNum(f_start?.value) ?? 0;
 
-  try{
-    // Сначала получим текущий sha (если файла ещё нет — обработаем отдельно)
-    let sha = null;
-
-    try{
-      const meta = await githubGetFile(GITHUB_PATH, ghToken);
-      sha = meta.sha;
-    }catch(e){
-      // если 404 — файла нет, можно создавать
-      sha = null;
-    }
-
-    const payload = { banks: state.banks };
-    const result = await githubPutFile(GITHUB_PATH, payload, sha, ghToken, "Update piggy.json");
-    state.sha = result.content?.sha || sha || null;
-
-    // Сохраним токен локально (не в JSON)
-    localStorage.setItem("tsc_piggy_gh_token", ghToken);
-
-    render();
-    toast("Сохранено в GitHub ✅", true);
-  }catch(e){
-    console.error(e);
-    toast("Ошибка сохранения в GitHub", false);
-  }
-}
-
-// ====== Init ======
-function bindEvents(){
-  // auth
-  loginBtn?.addEventListener("click", ()=>{
-    const v = (loginInput.value || "").trim();
-    if(v === APP_PASSWORD){
-      setAuthed(true);
-      loginErr.textContent = "";
-      showApp();
-      autoLoadState();
-    }else{
-      loginErr.textContent = "Неверный пароль";
-    }
-  });
-
-  loginInput?.addEventListener("keydown", (e)=>{
-    if(e.key === "Enter") loginBtn.click();
-  });
-
-  // modal
-  elModalClose?.addEventListener("click", closeModal);
-  elModal?.addEventListener("click", (e)=>{
-    if(e.target === elModal) closeModal();
-  });
-
-  elForm?.addEventListener("submit", (e)=>{
-    e.preventDefault();
-    upsertFromForm();
-  });
-
-  btnNew?.addEventListener("click", newBank);
-
-  // token
-  btnSaveGitHub?.addEventListener("click", saveToGitHub);
-
-  elTokenClose?.addEventListener("click", closeTokenModal);
-  elTokenModal?.addEventListener("click", (e)=>{
-    if(e.target === elTokenModal) closeTokenModal();
-  });
-
-  btnTokenSave?.addEventListener("click", ()=>{
-    ghToken = (inToken.value || "").trim();
-    if(!ghToken){
-      toast("Вставь token", false);
+    if(!name){
+      toast({ title:"Ошибка", message:"Введите название.", icon:"minus", timeout:2600 });
       return;
     }
-    localStorage.setItem("tsc_piggy_gh_token", ghToken);
-    closeTokenModal();
-    toast("Token сохранён локально", true);
-    // сразу пробуем сохранить
-    saveToGitHub();
-  });
 
-  // export/import
-  btnExport?.addEventListener("click", exportJson);
+    if(modalMode === "create"){
+      const id = uniqueId(slug(name) || "bank");
+      banks.unshift({
+        id,
+        name,
+        goal: (goal === null) ? null : goal,
+        balance: start,
+        createdAt: Date.now(),
+        order: Date.now()
+      });
+    }else{
+      const b = banks.find(x => x.id === editingId);
+      if(!b) return;
+      b.name = name;
+      b.goal = (goal === null) ? null : goal;
+      b.balance = start;
+    }
 
-  btnImport?.addEventListener("click", ()=>{
-    const inp = document.createElement("input");
-    inp.type = "file";
-    inp.accept = "application/json";
-    inp.onchange = ()=>{
-      const f = inp.files?.[0];
-      if(f) importJsonFile(f);
-    };
-    inp.click();
-  });
+    saveCache();
+    closeModalFn();
+    render();
+    return;
+  }
+
+  if(modalMode === "deposit" || modalMode === "withdraw"){
+    if(!banks.length){
+      toast({ title:"Ошибка", message:"Сначала создай копилку.", icon:"minus", timeout:2600 });
+      return;
+    }
+
+    const id = f_bank?.value;
+    const amt = parseNum(f_amount?.value);
+
+    if(!id){
+      toast({ title:"Ошибка", message:"Выберите копилку.", icon:"minus", timeout:2600 });
+      return;
+    }
+    if(amt === null || amt <= 0){
+      toast({ title:"Ошибка", message:"Введите сумму больше 0.", icon:"minus", timeout:2600 });
+      return;
+    }
+
+    const b = banks.find(x => x.id === id);
+    if(!b) return;
+
+    if(modalMode === "deposit") b.balance += amt;
+    else b.balance = Math.max(0, b.balance - amt);
+
+    saveCache();
+    closeModalFn();
+    render();
+    return;
+  }
 }
 
-(function init(){
-  bindEvents();
+saveBtn?.addEventListener("click", saveFromModal);
 
-  // token restore
-  ghToken = localStorage.getItem("tsc_piggy_gh_token") || "";
+createBtn?.addEventListener("click", openCreate);
+depositBtn?.addEventListener("click", ()=>{
+  if(!banks.length){ openCreate(); return; }
+  openOp("deposit");
+});
+withdrawBtn?.addEventListener("click", ()=>{
+  if(!banks.length){ openCreate(); return; }
+  openOp("withdraw");
+});
 
-  if(isAuthed()){
-    showApp();
-    autoLoadState();
-  }else{
-    showLogin();
+// ====== search ======
+if(clearSearch) clearSearch.style.display = "none";
+function syncClear(){
+  if(!clearSearch || !searchInput) return;
+  clearSearch.style.display = searchInput.value ? "block" : "none";
+}
+
+searchInput?.addEventListener("input", ()=>{
+  query = searchInput.value;
+  syncClear();
+  render();
+});
+clearSearch?.addEventListener("click", ()=>{
+  if(!searchInput) return;
+  searchInput.value = "";
+  query = "";
+  syncClear();
+  render();
+  searchInput.focus();
+});
+syncClear();
+
+// ====== GitHub buttons ======
+loadGithubBtn?.addEventListener("click", async ()=>{
+  try{
+    loadGithubBtn.disabled = true;
+    loadGithubBtn.textContent = "Загружаю...";
+
+    const pages = await pagesGetFile();
+    if(pages && Array.isArray(pages.banks)){
+      banks = normalizeBanks(pages.banks);
+      ensureOrderFields();
+      saveCache();
+      render();
+      toast({ title:"Загружено", message:"Загружено из GitHub Pages.", icon:"check", timeout:2400 });
+      return;
+    }
+
+    // если Pages пусто — грузим из кеша
+    const ok = loadCache();
+    ensureOrderFields();
+    render();
+    toast({
+      title:"Готово",
+      message: ok ? "На Pages пока пусто. Показал локальный кеш." : "На Pages пока пусто и кеш пустой.",
+      icon:"clock",
+      timeout:3200
+    });
+  }catch(e){
+    console.error(e);
+    toast({ title:"Ошибка", message:"Ошибка загрузки: " + (e?.message || ""), icon:"minus", timeout:4200 });
+  }finally{
+    loadGithubBtn.disabled = false;
+    loadGithubBtn.textContent = "Загрузить из GitHub";
   }
+});
+
+function setSaveBtnState(state){
+  if(!saveGithubBtn) return;
+  if(state === "loading"){
+    saveGithubBtn.disabled = true;
+    saveGithubBtn.innerHTML = `${ICONS.spinner} Сохраняю...`;
+  }else{
+    saveGithubBtn.disabled = false;
+    saveGithubBtn.textContent = "Сохранить в GitHub";
+  }
+}
+
+saveGithubBtn?.addEventListener("click", async ()=>{
+  try{
+    setSaveBtnState("loading");
+
+    const token = await ensureValidToken();
+    if(!token){
+      setSaveBtnState("default");
+      return;
+    }
+
+    // читаем sha
+    const { sha } = await githubGetFile(token).catch(()=>({ sha:null }));
+
+    await githubPutFile({ banks }, sha, token);
+
+    toast({ title:"Сохранено", message:"Изменения сохранены в GitHub.", icon:"check", timeout:2600 });
+  }catch(e){
+    console.error(e);
+    toast({ title:"Ошибка", message:"Ошибка сохранения: " + (e?.message || ""), icon:"minus", timeout:4200 });
+  }finally{
+    setSaveBtnState("default");
+  }
+});
+
+// ====== reorder ======
+orderBtn?.addEventListener("click", ()=>{
+  reorderMode = !reorderMode;
+  document.body.classList.toggle("orderOn", reorderMode);
+
+  const iconEdit = document.getElementById("orderIconEdit");
+  const iconDone = document.getElementById("orderIconDone");
+  if(iconEdit && iconDone){
+    iconEdit.style.display = reorderMode ? "none" : "block";
+    iconDone.style.display = reorderMode ? "block" : "none";
+  }
+
+  if(reorderMode){
+    if(sortable) sortable.destroy();
+
+    sortable = new Sortable(grid, {
+      animation: 150,
+      handle: ".card",
+      onEnd: ()=>{
+        const ids = [...grid.querySelectorAll(".card")].map(el=> el.dataset.id);
+        const map = new Map(banks.map(b => [b.id, b]));
+        banks = ids.map(id => map.get(id)).filter(Boolean);
+
+        // обновим order
+        const now = Date.now();
+        banks.forEach((b, i)=>{
+          b.order = now + i;
+        });
+
+        saveCache();
+      }
+    });
+  }else{
+    if(sortable) sortable.destroy();
+    sortable = null;
+  }
+});
+
+// ====== actions toggle ======
+actionsBtn?.addEventListener("click", ()=>{
+  actionsMode = !actionsMode;
+  document.body.classList.toggle("actionsOn", actionsMode);
+  if(actionsIconEdit && actionsIconDone){
+    actionsIconEdit.style.display = actionsMode ? "none" : "block";
+    actionsIconDone.style.display = actionsMode ? "block" : "none";
+  }
+});
+
+// ====== init ======
+(function init(){
+  // если нет авторизации — откроем логин и спрячем контент
+  if(!isAuthed()){
+    openLogin();
+  }else{
+    document.body.classList.remove("locked");
+  }
+
+  // грузим кеш сразу
+  loadCache();
+  ensureOrderFields();
+  render();
 })();
