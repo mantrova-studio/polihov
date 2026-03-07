@@ -49,6 +49,8 @@ font-weight:700;
 
 letter-spacing:2px;
 
+text-align:center;
+  
 }
 
 .subtitle{
@@ -57,6 +59,8 @@ color:var(--muted);
 
 margin-top:6px;
 
+text-align:center;
+  
 }
 
 .tools-grid{
