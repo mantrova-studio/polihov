@@ -241,7 +241,7 @@ function setHTML(id, value){ q(id).innerHTML = value ?? ''; }
 function formatBytes(bytes){ if(!bytes && bytes!==0) return '—'; const units=['B','KB','MB','GB']; let i=0, n=bytes; while(n>=1024 && i<units.length-1){n/=1024;i++;} return `${n.toFixed(n>=100||i===0?0:1)} ${units[i]}`; }
 function downloadBlob(blob, name){ const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); }
 function extByMime(m){ return m==='image/jpeg'?'jpg':m==='image/png'?'png':m==='image/webp'?'webp':'bin'; }
-function sanitizeName(name){ return (name||'file').replace(/[<>:"/\\|?*\x00-\x1F]/g,'').replace(/\s+/g,'-'); }
+function sanitizeName(name){ return (name||'file').replace(/[<>:"/\\|?*\x00-\x1F]/g,'').trim(); }
 function baseName(name){ const parts = name.split('.'); if(parts.length===1) return name; parts.pop(); return parts.join('.'); }
 function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
 function parseCSV(text){ const rows=[]; let row=[], cell='', quote=false; for(let i=0;i<text.length;i++){const ch=text[i], next=text[i+1]; if(ch==='"'){ if(quote && next==='"'){cell+='"'; i++;} else quote=!quote; } else if(ch===',' && !quote){row.push(cell); cell='';} else if((ch==='\n' || ch==='\r') && !quote){ if(ch==='\r' && next==='\n') i++; row.push(cell); rows.push(row); row=[]; cell=''; } else cell+=ch; } row.push(cell); rows.push(row); return rows.filter(r=>!(r.length===1 && r[0]==='')); }
