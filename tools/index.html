@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>POLIHOV DEV STUDIO — Tools Suite</title>
+  <link rel="stylesheet" href="assets/css/style.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script defer src="assets/js/app.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-badge">POLIHOV DEV STUDIO</div>
+        <h1>TOOLS SUITE</h1>
+        <p>49 рабочих утилит в одном статическом сайте.</p>
+      </div>
+      <div class="sidebar-search">
+        <input id="toolSearch" type="search" placeholder="Поиск инструмента..." />
+      </div>
+      <nav id="toolNav" class="tool-nav"></nav>
+    </aside>
+
+    <main class="main">
+      <header class="hero">
+        <div>
+          <div class="eyebrow">ALL-IN-ONE WEB TOOLKIT</div>
+          <h2>Пакет инструментов для изображений, данных, кода, дизайна, файлов, текста, SEO и безопасности</h2>
+          <p>Все инструменты работают прямо в браузере. Подходит для GitHub Pages и твоего личного раздела tools.</p>
+        </div>
+        <div class="hero-stats">
+          <div class="stat"><span>49</span><small>инструментов</small></div>
+          <div class="stat"><span>100%</span><small>статический сайт</small></div>
+          <div class="stat"><span>ZIP</span><small>массовые операции</small></div>
+        </div>
+      </header>
+
+      <section class="dashboard">
+        <div class="dashboard-card">
+          <div class="dashboard-label">Категорий</div>
+          <div class="dashboard-value">8</div>
+        </div>
+        <div class="dashboard-card">
+          <div class="dashboard-label">Работа с файлами</div>
+          <div class="dashboard-value">Пакетная</div>
+        </div>
+        <div class="dashboard-card">
+          <div class="dashboard-label">Хостинг</div>
+          <div class="dashboard-value">GitHub Pages</div>
+        </div>
+      </section>
+
+      <div id="toolsContainer" class="tools-container"></div>
+    </main>
+  </div>
+</body>
+</html>
