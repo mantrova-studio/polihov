@@ -1,0 +1,56 @@
+<!DOCTYPE html><html lang="ru"><head>
+<meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Image Compressor — POLIHOV DEV STUDIO</title>
+<link rel="stylesheet" href="../assets/css/style.css" />
+</head><body>
+<div class="page">
+<header class="topbar">
+  <a class="brand" href="../"><div class="brand-mark">P</div><div><div>POLIHOV DEV STUDIO</div><div class="brand-sub">Image Compressor</div></div></a>
+  <nav class="nav"><a class="nav-link" href="../">Главная</a><a class="nav-link active" href="./">Image Compressor</a></nav>
+</header>
+<section class="hero">
+  <div class="badge">TOOL • IMAGE COMPRESSOR</div>
+  <h1>Пакетное сжатие изображений</h1>
+  <p>Загружай сразу много фото, уменьшай размер и вес, выбирай WEBP / JPG / PNG и скачивай результат одним ZIP-архивом.</p>
+  <div class="grid">
+    <div class="card">
+      <h2>Загрузка</h2>
+      <label class="dropzone" id="dropzone" for="fileInput">
+        <div><div class="drop-icon">+</div><div class="drop-title">Выбрать изображения</div><div class="drop-desc">Нажми сюда или перетащи файлы. Поддерживаются JPG, PNG и WEBP.</div></div>
+      </label>
+      <input class="hidden-input" id="fileInput" type="file" accept="image/jpeg,image/png,image/webp" multiple />
+      <div class="actions">
+        <button class="btn btn-primary" id="chooseBtn" type="button">Выбрать файлы</button>
+        <button class="btn btn-dark" id="startBtn" type="button" disabled>Сжать и скачать ZIP</button>
+        <button class="btn btn-danger" id="clearBtn" type="button" disabled>Очистить</button>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="stat-k">Файлов</div><div class="stat-v" id="countValue">0</div></div>
+        <div class="stat"><div class="stat-k">Исходный размер</div><div class="stat-v" id="inputSizeValue">0 KB</div></div>
+        <div class="stat"><div class="stat-k">Экономия</div><div class="stat-v" id="savingValue">—</div></div>
+      </div>
+      <div class="progress-wrap">
+        <div class="progress-top"><div id="progressLabel">Ожидание загрузки файлов</div><div class="muted" id="progressText">0%</div></div>
+        <div class="bar"><span id="progressBar"></span></div>
+        <div class="status" id="statusText">Здесь будет статус обработки.</div>
+      </div>
+      <div class="table" id="fileTable"></div>
+    </div>
+    <div class="card">
+      <h2>Настройки</h2>
+      <div class="controls">
+        <div class="field"><label for="maxWidth">Макс. ширина</label><input id="maxWidth" type="number" value="1200" min="100" max="5000" /></div>
+        <div class="field"><label for="maxHeight">Макс. высота</label><input id="maxHeight" type="number" value="1200" min="100" max="5000" /></div>
+        <div class="field"><label for="quality">Качество</label><input id="quality" type="number" value="75" min="1" max="100" /></div>
+        <div class="field"><label for="format">Формат результата</label><select id="format"><option value="image/webp" selected>WEBP</option><option value="image/jpeg">JPG</option><option value="image/png">PNG</option></select></div>
+        <div class="field"><label for="zipName">Имя ZIP</label><input id="zipName" type="text" value="compressed-images" /></div>
+        <div class="field"><label>Имена файлов</label><div class="static">Оригинальные имена сохраняются автоматически</div></div>
+      </div>
+      <div class="note">Для фото блюд обычно оптимальны: 1200 × 1200 и качество 72–78. PNG лучше выбирать для логотипов и прозрачности.</div>
+      <div class="preview-grid" id="previewGrid"></div>
+    </div>
+  </div>
+</section><div class="footer">© POLIHOV DEV STUDIO</div></div>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="../assets/js/common.js"></script><script src="app.js"></script>
+</body></html>
