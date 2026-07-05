@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Накопи 10 000 ₽</title>
+  <style>
+    :root {
+      --bg: #f6efe5;
+      --card: rgba(255, 255, 255, 0.82);
+      --text: #2b2118;
+      --muted: #8f7d6b;
+      --accent: #b88547;
+      --accent-2: #e0b16f;
+      --line: rgba(66, 47, 30, 0.18);
+      --done: rgba(45, 35, 25, 0.18);
+      --shadow: 0 24px 70px rgba(58, 38, 18, 0.16);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 10% 15%, rgba(255,255,255,0.8) 0 4px, transparent 5px),
+        radial-gradient(circle at 85% 10%, rgba(255,255,255,0.7) 0 6px, transparent 7px),
+        radial-gradient(circle at 75% 75%, rgba(255,255,255,0.55) 0 5px, transparent 6px),
+        linear-gradient(135deg, #fff8ef 0%, #f2dcc0 45%, #e8c99d 100%);
+      padding: 18px;
+    }
+
+    .wrap {
+      width: min(980px, 100%);
+      margin: 0 auto;
+      padding: 18px 0 34px;
+    }
+
+    .hero {
+      background: var(--card);
+      border: 1px solid rgba(255,255,255,0.6);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      padding: clamp(18px, 4vw, 34px);
+      backdrop-filter: blur(18px);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: "";
+      position: absolute;
+      inset: -80px auto auto -80px;
+      width: 220px;
+      height: 220px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.42);
+      pointer-events: none;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(32px, 7vw, 68px);
+      line-height: 0.95;
+      letter-spacing: -0.05em;
+    }
+
+    .subtitle {
+      margin: 12px 0 0;
+      color: var(--muted);
+      font-size: clamp(14px, 2.4vw, 18px);
+      line-height: 1.45;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin: 22px 0 16px;
+    }
+
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: rgba(255,255,255,0.55);
+      padding: 14px;
+      min-height: 82px;
+    }
+
+    .stat span {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+
+    .stat strong {
+      font-size: clamp(20px, 4vw, 30px);
+      letter-spacing: -0.04em;
+    }
+
+    .progress {
+      height: 15px;
+      border-radius: 999px;
+      background: rgba(74, 54, 34, 0.11);
+      overflow: hidden;
+      border: 1px solid rgba(74, 54, 34, 0.08);
+    }
+
+    .bar {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      transition: width 0.35s ease;
+    }
+
+    .panel {
+      margin-top: 18px;
+      background: rgba(255,255,255,0.72);
+      border: 1px solid rgba(255,255,255,0.62);
+      border-radius: 24px;
+      box-shadow: 0 18px 50px rgba(58, 38, 18, 0.12);
+      padding: clamp(10px, 2.5vw, 18px);
+    }
+
+    .money-grid {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 6px;
+    }
+
+    .cell {
+      border: 1px solid rgba(54, 37, 21, 0.2);
+      border-radius: 12px;
+      min-height: clamp(34px, 8.5vw, 64px);
+      display: grid;
+      place-items: center;
+      background: rgba(255,255,255,0.86);
+      color: var(--text);
+      font-weight: 800;
+      font-size: clamp(11px, 2.7vw, 18px);
+      cursor: pointer;
+      user-select: none;
+      transition: transform .18s ease, opacity .18s ease, background .18s ease, box-shadow .18s ease;
+      box-shadow: 0 8px 18px rgba(60, 40, 20, 0.06);
+    }
+
+    .cell:active { transform: scale(0.96); }
+
+    .cell.done {
+      opacity: 0.38;
+      background: var(--done);
+      text-decoration: line-through;
+      text-decoration-thickness: 2px;
+      box-shadow: none;
+    }
+
+    .actions {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 18px;
+      font-weight: 800;
+      cursor: pointer;
+      color: #fff;
+      background: linear-gradient(135deg, #7f5330, #c28a4a);
+      box-shadow: 0 12px 26px rgba(127, 83, 48, 0.25);
+    }
+
+    button.secondary {
+      color: var(--text);
+      background: rgba(255,255,255,0.7);
+      border: 1px solid var(--line);
+      box-shadow: none;
+    }
+
+    .finish {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(27, 18, 10, 0.55);
+      backdrop-filter: blur(10px);
+    }
+
+    .finish.show { display: flex; }
+
+    .finish-card {
+      width: min(520px, 100%);
+      border-radius: 30px;
+      padding: 28px;
+      text-align: center;
+      background: linear-gradient(145deg, #fff9ef, #f0d5ae);
+      box-shadow: 0 30px 90px rgba(0,0,0,0.35);
+      border: 1px solid rgba(255,255,255,0.65);
+      animation: pop .4s ease both;
+    }
+
+    .finish-card h2 {
+      margin: 0 0 10px;
+      font-size: clamp(32px, 8vw, 58px);
+      line-height: 0.95;
+      letter-spacing: -0.05em;
+    }
+
+    .finish-card p {
+      margin: 0 0 18px;
+      color: #6c553f;
+      font-size: 18px;
+    }
+
+    canvas#fireworks {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      pointer-events: none;
+      display: none;
+      filter: drop-shadow(0 0 10px rgba(255, 230, 150, 0.9));
+    }
+
+    canvas#fireworks.show { display: block; }
+
+    @keyframes pop {
+      from { transform: translateY(18px) scale(.96); opacity: 0; }
+      to { transform: translateY(0) scale(1); opacity: 1; }
+    }
+
+    @media (max-width: 560px) {
+      body { padding: 10px; }
+      .stats { grid-template-columns: 1fr; }
+      .stat { min-height: auto; }
+      .money-grid { gap: 4px; }
+      .panel { border-radius: 18px; padding: 8px; }
+      .cell { border-radius: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="fireworks"></canvas>
+
+  <main class="wrap">
+    <section class="hero">
+      <h1>Накопи<br>10 000 ₽</h1>
+      <p class="subtitle">Нажимай на сумму после того, как отложил деньги. Клетка зачеркнётся и станет тусклее. При повторном нажатии сумма вернётся обратно.</p>
+
+      <div class="stats">
+        <div class="stat"><span>Накоплено</span><strong id="savedSum">0 ₽</strong></div>
+        <div class="stat"><span>Осталось</span><strong id="leftSum">10 000 ₽</strong></div>
+        <div class="stat"><span>Закрыто клеток</span><strong id="closedCount">0 / 64</strong></div>
+      </div>
+
+      <div class="progress" aria-label="Прогресс накопления"><div class="bar" id="bar"></div></div>
+    </section>
+
+    <section class="panel">
+      <div class="money-grid" id="grid"></div>
+      <div class="actions">
+        <button class="secondary" id="reset" type="button">Сбросить прогресс</button>
+      </div>
+    </section>
+  </main>
+
+  <div class="finish" id="finish">
+    <div class="finish-card">
+      <h2>Поздравляю! 🎉</h2>
+      <p>Ты закрыл все клетки и накопил 10 000 ₽.</p>
+      <button id="closeFinish" type="button">Ура!</button>
+    </div>
+  </div>
+
+  <script>
+    const amounts = [
+      [100, 100, 50, 200, 50, 100, 100, 200],
+      [100, 100, 500, 500, 100, 100, 100, 100],
+      [50, 200, 50, 100, 50, 100, 100, 200],
+      [500, 50, 100, 200, 50, 200, 100, 50],
+      [500, 50, 100, 200, 100, 100, 500, 50],
+      [500, 500, 100, 200, 100, 100, 100, 50],
+      [50, 100, 100, 200, 100, 50, 100, 200],
+      [100, 50, 200, 50, 200, 50, 500, 100]
+    ].flat();
+
+    const TARGET = 10000;
+    const STORAGE_KEY = 'nakopi_10000_closed_cells_v2_no_tens';
+
+    const grid = document.getElementById('grid');
+    const savedSumEl = document.getElementById('savedSum');
+    const leftSumEl = document.getElementById('leftSum');
+    const closedCountEl = document.getElementById('closedCount');
+    const bar = document.getElementById('bar');
+    const finish = document.getElementById('finish');
+    const fireworksCanvas = document.getElementById('fireworks');
+
+    let closed = new Set(JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'));
+    let fireworkAnimationId = null;
+    let particles = [];
+
+    const money = new Intl.NumberFormat('ru-RU').format;
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([...closed]));
+    }
+
+    function renderGrid() {
+      grid.innerHTML = '';
+      amounts.forEach((amount, index) => {
+        const cell = document.createElement('div');
+        cell.className = 'cell' + (closed.has(index) ? ' done' : '');
+        cell.textContent = money(amount);
+        cell.setAttribute('role', 'button');
+        cell.setAttribute('tabindex', '0');
+        cell.setAttribute('aria-label', `${money(amount)} рублей`);
+        cell.addEventListener('click', () => toggleCell(index));
+        cell.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleCell(index);
+          }
+        });
+        grid.appendChild(cell);
+      });
+      updateStats();
+    }
+
+    function toggleCell(index) {
+      const wasComplete = closed.size === amounts.length;
+      if (closed.has(index)) closed.delete(index);
+      else closed.add(index);
+
+      saveState();
+      renderGrid();
+
+      const isComplete = closed.size === amounts.length;
+      if (!wasComplete && isComplete) celebrate();
+    }
+
+    function updateStats() {
+      const saved = [...closed].reduce((sum, index) => sum + amounts[index], 0);
+      const left = Math.max(TARGET - saved, 0);
+      savedSumEl.textContent = `${money(saved)} ₽`;
+      leftSumEl.textContent = `${money(left)} ₽`;
+      closedCountEl.textContent = `${closed.size} / ${amounts.length}`;
+      bar.style.width = `${Math.min((saved / TARGET) * 100, 100)}%`;
+    }
+
+    document.getElementById('reset').addEventListener('click', () => {
+      if (!confirm('Сбросить весь прогресс?')) return;
+      closed.clear();
+      saveState();
+      finish.classList.remove('show');
+      stopFireworks();
+      renderGrid();
+    });
+
+    document.getElementById('closeFinish').addEventListener('click', () => {
+      finish.classList.remove('show');
+      stopFireworks();
+    });
+
+    function celebrate() {
+      finish.classList.add('show');
+      startFireworks();
+    }
+
+    function startFireworks() {
+      const ctx = fireworksCanvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      fireworksCanvas.width = innerWidth * dpr;
+      fireworksCanvas.height = innerHeight * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      fireworksCanvas.classList.add('show');
+      particles = [];
+
+      const colors = ['#fff200', '#ffb000', '#ff4d6d', '#00d4ff', '#a855f7', '#35ff8b', '#ffffff'];
+      const burst = () => {
+        const x = Math.random() * innerWidth;
+        const y = Math.random() * innerHeight * 0.58 + 35;
+        const count = 86;
+        for (let i = 0; i < count; i++) {
+          const angle = (Math.PI * 2 * i) / count;
+          const speed = 3 + Math.random() * 7;
+          particles.push({
+            x, y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 85 + Math.random() * 45,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            size: 3 + Math.random() * 4
+          });
+        }
+      };
+
+      for (let i = 0; i < 8; i++) setTimeout(burst, i * 230);
+      const interval = setInterval(burst, 560);
+      setTimeout(() => clearInterval(interval), 7800);
+
+      function frame() {
+        ctx.clearRect(0, 0, innerWidth, innerHeight);
+        particles = particles.filter(p => p.life > 0);
+        for (const p of particles) {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += 0.035;
+          p.life -= 1;
+          ctx.globalAlpha = Math.max(p.life / 110, 0);
+          ctx.fillStyle = p.color;
+          ctx.shadowBlur = 18;
+          ctx.shadowColor = p.color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        ctx.shadowBlur = 0;
+        fireworkAnimationId = requestAnimationFrame(frame);
+      }
+
+      cancelAnimationFrame(fireworkAnimationId);
+      frame();
+    }
+
+    function stopFireworks() {
+      cancelAnimationFrame(fireworkAnimationId);
+      fireworksCanvas.classList.remove('show');
+      particles = [];
+    }
+
+    window.addEventListener('resize', () => {
+      if (fireworksCanvas.classList.contains('show')) startFireworks();
+    });
+
+    renderGrid();
+  </script>
+</body>
+</html>
